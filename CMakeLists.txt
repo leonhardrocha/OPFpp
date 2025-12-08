@@ -1,26 +1,26 @@
-cmake_minimum_required(VERSION 3.10)
+# Set the minimum required version of CMake
+cmake_minimum_required(VERSION 3.15)
 
-project(HelloWorld)
+# Project definition
+project(pyopf LANGUAGES CXX)
 
-set(CMAKE_CXX_STANDARD 17)
-set(CMAKE_CXX_STANDARD_REQUIRED ON)
+# The C++ standard is set by the Conan toolchain.
+# This is a fallback in case the project is configured without it.
+if(NOT CMAKE_CXX_STANDARD)
+    set(CMAKE_CXX_STANDARD 20)
+    set(CMAKE_CXX_STANDARD_REQUIRED ON)
+    set(CMAKE_CXX_EXTENSIONS OFF)
+endif()
 
-# Set output directories for all generators
-set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
-set(CMAKE_LIBRARY_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/lib)
-set(CMAKE_ARCHIVE_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/lib)
+# Find dependencies provided by Conan.
+# The Conan-generated CMakeDeps files make this possible.
+find_package(pybind11 REQUIRED)
+find_package(GTest REQUIRED)
 
-
-# --- Library ---
-add_library(helloworld_lib src/helloworld.cpp)
-target_include_directories(helloworld_lib PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/include)
-
-# --- Executable ---
-add_executable(helloworld src/main.cpp)
-target_link_libraries(helloworld PRIVATE helloworld_lib)
-
-# --- Testing ---
-enable_testing()
-add_executable(run_tests tests/test_helloworld.cpp)
-target_link_libraries(run_tests PRIVATE helloworld_lib)
-add_test(NAME HelloWorldLibTest COMMAND $<TARGET_FILE:run_tests>)
+# Add project subdirectories.
+# Their CMakeLists should link against the targets provided by find_package
+# (e.g., pybind11::pybind11, GTest::gtest).
+add_subdirectory(src)
+add_subdirectory(python)
+add_subdirectory(apps)
+add_subdirectory(tests)

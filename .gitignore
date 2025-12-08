@@ -1,10 +1,17 @@
 # Build artifacts
 build/
+_deps/*.vcproj*
+apps/*.vcproj*
 *.exe
 *.dll
 *.so
 *.a
 *.out
+*.vcproj*
+*.sln
+*.pdb
+*.cmake
+*.pc
 
 # CMake
 CMakeCache.txt
