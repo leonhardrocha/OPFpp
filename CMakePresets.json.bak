@@ -9,16 +9,14 @@
             "binaryDir": "${sourceDir}/build/gcc",
             "cacheVariables": {
                 "CMAKE_BUILD_TYPE": "Debug",
-                "CMAKE_TOOLCHAIN_FILE": "${sourceDir}/build/gcc/conan_toolchain.cmake",
-                "CMAKE_MAKE_PROGRAM": "d:/msys64/mingw64/bin/ninja.exe",
-                "CMAKE_NINJA_EXECUTABLE": "d:/msys64/mingw64/bin/ninja.exe"
+                "CMAKE_TOOLCHAIN_FILE": "${sourceDir}/build/gcc/conan_toolchain.cmake"
             }
         },
         {
             "name": "msvc",
             "displayName": "MSVC",
             "description": "Uses Conan toolchain for MSVC. Run 'conan install . --output-folder=build/msvc --build=missing -s build_type=Debug' first.",
-            "generator": "Visual Studio 17 2022",
+            "generator": "Ninja",
             "binaryDir": "${sourceDir}/build/msvc",
             "cacheVariables": {
                 "CMAKE_BUILD_TYPE": "Debug",

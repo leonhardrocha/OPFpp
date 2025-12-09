@@ -1,20 +1,40 @@
 # Build artifacts
 build/
-_deps/*.vcproj*
-apps/*.vcproj*
+# Visual Studio
+*.vcxproj
+*.vcxproj.filters
+*.vcxproj.user
+*.sln
+*.sln.filters
+*.sln.user
+*.user
+*.props
+*.filters
+*.cache
+*.ncb
+*.sdf
+*.opensdf
+apps/*.vcxproj*
 *.exe
 *.dll
 *.so
 *.a
 *.out
-*.vcproj*
+*.vcxproj*
 *.sln
 *.pdb
 *.cmake
 *.pc
+
+
 
 # CMake
 CMakeCache.txt
 CMakeFiles/
 cmake_install.cmake
 Makefile
+_deps/googletest-*/
+*.obj
+*.o
+*.tlog
+*.log
