@@ -14,6 +14,7 @@ endif()
 
 # Find dependencies provided by Conan.
 # The Conan-generated CMakeDeps files make this possible.
+# Add the Conan generators folder to the search path
 find_package(pybind11 REQUIRED)
 find_package(GTest REQUIRED)
 

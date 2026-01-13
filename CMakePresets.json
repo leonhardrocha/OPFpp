@@ -23,5 +23,13 @@
                 "CMAKE_TOOLCHAIN_FILE": "${sourceDir}/build/msvc/conan_toolchain.cmake"
             }
         }
+    ],
+    "buildPresets": [
+        {
+            "name": "GCC",
+            "description": "",
+            "displayName": "",
+            "configurePreset": "gcc"
+        }
     ]
 }

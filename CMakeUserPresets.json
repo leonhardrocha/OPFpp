@@ -5,6 +5,7 @@
     },
     "include": [
         "build/msvc/CMakePresets.json",
-        "build/gcc/CMakePresets.json"
+        "build/gcc/CMakePresets.json",
+        "build/CMakePresets.json"
     ]
 }

@@ -1,0 +1,34 @@
+{
+    "profiles": [
+        {
+            "name":"linux",
+            "conanFile": "${workspaceFolder}/conanfile.py",
+            "profile":"default",
+            "installArg": "",
+            "buildArg":"",
+            "createUser": "",
+            "createChannel": "",
+            "createArg":""
+        },
+        {
+            "name":"linux-2",
+            "conanFile": "${workspaceFolder}/conanfile.py",
+            "profileBuild":"default",
+            "profileHost":"default",
+            "installArg": "",
+            "buildArg":"",
+            "createUser": "",
+            "createChannel": "",
+            "createArg":""
+        }
+    ],
+    "workspace":[        
+        {
+            "name":"libopf",
+            "conanWs": "${workspaceFolder}",
+            "profileBuild":"default",
+            "profileHost":"default",
+            "arg": ""
+        }
+    ]
+}
