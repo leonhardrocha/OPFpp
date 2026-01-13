@@ -4,7 +4,8 @@
     "cmake.configureSettings": {
         "CMAKE_TOOLCHAIN_FILE": "/D/src/projects/helloworld/build/gcc/conan_toolchain.cmake",
         "CMAKE_C_COMPILER": "/D/msys64/mingw64/bin/gcc.exe",
-        "CMAKE_CXX_COMPILER": "/D/msys64/mingw64/bin/g++.exe"
+        "CMAKE_CXX_COMPILER": "/D/msys64/mingw64/bin/g++.exe",
+        "PYTHON_EXECUTABLE": "/C/Python312/python.exe"
     },
     
 }
