@@ -23,8 +23,14 @@ public:
 private:
     void GoUp(int i);
     void GoDown(int i);
-
+    float *cost;
+    char *color;
+    int *pixel;
+    int *pos;
+    int last;
     int m_n;
+    int n;   
+    char removal_policy; /* 0 is MINVALUE and 1 is MAXVALUE *
     std::span<float> m_cost;
     std::vector<char> m_color;
     std::vector<int> m_pixel;

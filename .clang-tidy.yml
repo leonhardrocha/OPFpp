@@ -1,0 +1,22 @@
+
+# Habilita verificações de modernização e boas práticas do C++ Core Guidelines
+Checks: >
+  -*,
+  modernize-*,
+  cppcoreguidelines-*,
+  readability-redundant-void-arg,
+  modernize-deprecated-headers,
+  modernize-use-nullptr,
+  modernize-use-auto,
+  modernize-avoid-c-arrays
+
+# Configurações específicas para os checks
+CheckOptions:
+  - key:             modernize-use-auto.MinTypeNameLength
+    value:           '5'
+  - key:             modernize-loop-convert.MaxCopySize
+    value:           '16'
+
+# Filtro para aplicar apenas nos seus headers, ignorando bibliotecas externas
+HeaderFilterRegex:  'include/.*'
+

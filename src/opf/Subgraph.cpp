@@ -1,20 +1,23 @@
 #include "opf/Subgraph.hpp"
 #include "opf/RealHeap.hpp"
+#include "opf.hpp"
 #include <fstream>
 #include <sstream>
 #include <iostream>
 #include <numeric>
 #include <cmath>
 #include <algorithm>
-#include <limits>
+#include <climits>
+
+// TODO: These global variables should be removed and passed as parameters or class members.
+extern char opf_PrecomputedDistance;
+extern float **opf_DistanceValue;
 
 namespace opf {
 
 // Initialize distance function pointer
 Subgraph::DistanceFunction Subgraph::Distance = Subgraph::EuclideanDistanceLog;
 
-// SNode Implementation
-SNode::SNode(size_t n_feats) : feat(n_feats, 0.0f) {}
 
 // Subgraph Implementation
 Subgraph::Subgraph(size_t n_nodes, size_t n_feats, size_t n_labels)
@@ -22,6 +25,18 @@ Subgraph::Subgraph(size_t n_nodes, size_t n_feats, size_t n_labels)
       ordered_list_of_nodes(n_nodes, 0),
       nlabels(n_labels),
       nfeats(n_feats) {}
+
+Subgraph::Subgraph(const Subgraph& other)
+    : nodes(other.nodes),
+      ordered_list_of_nodes(other.ordered_list_of_nodes),
+      nlabels(other.nlabels),
+      nfeats(other.nfeats),
+      df(other.df),
+      K(other.K),
+      mindens(other.mindens),
+      maxdens(other.maxdens),
+      bestk(other.bestk) {}
+
 
 std::unique_ptr<Subgraph> Subgraph::Read(const std::string& filename) {
     std::ifstream file(filename, std::ios::binary);
@@ -31,29 +46,29 @@ std::unique_ptr<Subgraph> Subgraph::Read(const std::string& filename) {
 
     int n_nodes;
     file.read(reinterpret_cast<char*>(&n_nodes), sizeof(int));
-    auto g = std::make_unique<Subgraph>(n_nodes);
+    auto subgraph = std::make_unique<Subgraph>(n_nodes);
 
-    file.read(reinterpret_cast<char*>(&g->nlabels), sizeof(size_t));
-    file.read(reinterpret_cast<char*>(&g->nfeats), sizeof(size_t));
-    file.read(reinterpret_cast<char*>(&g->df), sizeof(float));
-    file.read(reinterpret_cast<char*>(&g->K), sizeof(float));
-    file.read(reinterpret_cast<char*>(&g->mindens), sizeof(float));
-    file.read(reinterpret_cast<char*>(&g->maxdens), sizeof(float));
+    file.read(reinterpret_cast<char*>(&subgraph->nlabels), sizeof(size_t));
+    file.read(reinterpret_cast<char*>(&subgraph->nfeats), sizeof(size_t));
+    file.read(reinterpret_cast<char*>(&subgraph->df), sizeof(float));
+    file.read(reinterpret_cast<char*>(&subgraph->K), sizeof(float));
+    file.read(reinterpret_cast<char*>(&subgraph->mindens), sizeof(float));
+    file.read(reinterpret_cast<char*>(&subgraph->maxdens), sizeof(float));
 
     for (int i = 0; i < n_nodes; ++i) {
-        g->nodes[i].feat.resize(g->nfeats);
-        file.read(reinterpret_cast<char*>(&g->nodes[i].position), sizeof(int));
-        file.read(reinterpret_cast<char*>(&g->nodes[i].truelabel), sizeof(int));
-        file.read(reinterpret_cast<char*>(&g->nodes[i].pred), sizeof(int));
-        file.read(reinterpret_cast<char*>(&g->nodes[i].label), sizeof(int));
-        file.read(reinterpret_cast<char*>(&g->nodes[i].pathval), sizeof(float));
-        file.read(reinterpret_cast<char*>(&g->nodes[i].radius), sizeof(float));
-        file.read(reinterpret_cast<char*>(g->nodes[i].feat.data()), g->nfeats * sizeof(float));
+        subgraph->nodes[i].feat.resize(subgraph->nfeats);
+        file.read(reinterpret_cast<char*>(&subgraph->nodes[i].position), sizeof(int));
+        file.read(reinterpret_cast<char*>(&subgraph->nodes[i].truelabel), sizeof(int));
+        file.read(reinterpret_cast<char*>(&subgraph->nodes[i].pred), sizeof(int));
+        file.read(reinterpret_cast<char*>(&subgraph->nodes[i].label), sizeof(int));
+        file.read(reinterpret_cast<char*>(&subgraph->nodes[i].pathval), sizeof(float));
+        file.read(reinterpret_cast<char*>(&subgraph->nodes[i].radius), sizeof(float));
+        file.read(reinterpret_cast<char*>(subgraph->nodes[i].feat.data()), subgraph->nfeats * sizeof(float));
     }
 
-    file.read(reinterpret_cast<char*>(g->ordered_list_of_nodes.data()), n_nodes * sizeof(int));
+    file.read(reinterpret_cast<char*>(subgraph->ordered_list_of_nodes.data()), n_nodes * sizeof(int));
 
-    return g;
+    return subgraph;
 }
 
 std::unique_ptr<Subgraph> Subgraph::ReadFromText(const std::string& filename) {
@@ -449,6 +464,110 @@ void Subgraph::Cluster(int k_max, UnsupervisedFilterType filter_type, float filt
     } else {
         for(auto& node : nodes) {
             node.truelabel = node.label + 1; // OPF convention
+        }
+    }
+}
+
+void Subgraph::CreateArcs(int knn) {
+    if (nodes.empty() || knn <= 0) return;
+
+    df = 0.0;
+    for (size_t i = 0; i < nodes.size(); ++i) {
+        std::vector<float> d(knn, std::numeric_limits<float>::max());
+        std::vector<int> nn(knn, -1);
+
+        for (size_t j = 0; j < nodes.size(); ++j) {
+            if (i == j) continue;
+
+            float current_dist;
+            if (!opf_PrecomputedDistance) {
+                current_dist = Distance(nodes[i].feat, nodes[j].feat);
+            } else {
+                current_dist = opf_DistanceValue[nodes[i].position][nodes[j].position];
+            }
+
+            if (current_dist < d.back()) {
+                d.back() = current_dist;
+                nn.back() = j;
+                // bubble up to correct position
+                for (int k = knn - 1; k > 0; --k) {
+                    if (d[k] < d[k-1]) {
+                        std::swap(d[k], d[k-1]);
+                        std::swap(nn[k], nn[k-1]);
+                    } else {
+                        break;
+                    }
+                }
+            }
+        }
+
+        nodes[i].adj.clear();
+        nodes[i].radius = 0.0f;
+        for (int l = 0; l < knn; ++l) {
+            if (nn[l] != -1) {
+                if (d[l] > df) {
+                    df = d[l];
+                }
+                nodes[i].adj.push_back(nn[l]);
+            }
+        }
+        if(!d.empty() && d.back() != std::numeric_limits<float>::max()){
+            nodes[i].radius = d.back();
+        }
+    }
+
+    if (df < 1e-5f) {
+        df = 1.0f;
+    }
+}
+
+void Subgraph::DestroyArcs() {
+    for (auto& node : nodes) {
+        node.nplatadj = 0;
+        node.adj.clear();
+    }
+}
+
+void Subgraph::ComputePDF() {
+    if (nodes.empty()) return;
+
+    K = (2.0f * df / 9.0f);
+    if (K < 1e-5f) K = 1e-5f;
+
+    std::vector<float> value(nodes.size(), 0.0f);
+    mindens = std::numeric_limits<float>::max();
+    maxdens = std::numeric_limits<float>::min();
+
+    for (size_t i = 0; i < nodes.size(); ++i) {
+        float dens_val = 0.0f;
+        for (int neighbor_idx : nodes[i].adj) {
+            float dist;
+            if (!opf_PrecomputedDistance) {
+                dist = Distance(nodes[i].feat, nodes[neighbor_idx].feat);
+            } else {
+                dist = opf_DistanceValue[nodes[i].position][nodes[neighbor_idx].position];
+            }
+            dens_val += std::exp(-dist / K);
+        }
+        
+        if (nodes[i].adj.empty())
+            value[i] = 0.0f;
+        else
+            value[i] = dens_val / (nodes[i].adj.size());
+
+        if (value[i] < mindens) mindens = value[i];
+        if (value[i] > maxdens) maxdens = value[i];
+    }
+
+    if (std::abs(mindens - maxdens) < 1e-5) {
+        for (auto& node : nodes) {
+            node.dens = opf_MAXDENS;
+            node.pathval = opf_MAXDENS - 1.0f;
+        }
+    } else {
+        for (size_t i = 0; i < nodes.size(); ++i) {
+            nodes[i].dens = ((opf_MAXDENS - 1.0f) * (value[i] - mindens) / (maxdens - mindens)) + 1.0f;
+            nodes[i].pathval = nodes[i].dens - 1.0f;
         }
     }
 }

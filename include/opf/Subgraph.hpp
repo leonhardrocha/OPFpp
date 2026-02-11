@@ -1,50 +1,13 @@
 #pragma once
 
 #include "opf/common.hpp"
+#include "opf/SNode.hpp"
 #include <vector>
-#include <span>
 #include <string>
 #include <list>
 #include <memory>
 
 namespace opf {
-
-struct SNode {
-    std::span<float> feat;
-    std::list<int> adj;
-    int position = 0;
-    int truelabel = 0;
-    int label = 0;
-    int pred = NIL;
-    int root = NIL;
-    float pathval = 0.0f;
-    float radius = 0.0f;
-    float dens = 0.0f;
-    int status = 0;
-    int relevant = 0;
-    int nplatadj = 0;
-
-    SNode() = default;
-    SNode(const SNode& other)
-    {
-        feat = std::vector<float>(other.feat.begin(), other.feat.end());
-        adj = std::list<int>(other.adj.begin(), other.adj.end());
-        //std::vector<int> deep_copied_vector_cpp23(view_span);
-
-        pathval = other.pathval;
-        dens = other.dens;
-        label  = other.label;
-        root = other.root;
-        pred  = other.pred;
-        truelabel = other.truelabel;
-        position = other.position;
-        status = other.status;
-        relevant = other.relevant;
-        radius = other.radius;
-        nplatadj = other.nplatadj;
-    };
-    explicit SNode(size_t n_feats);
-};
 
 class Subgraph {
 public:
@@ -60,8 +23,9 @@ public:
 
     // Construction and I/O
     Subgraph(size_t n_nodes = 0, size_t n_feats = 0, size_t n_labels = 0);
-    static std::unique_ptr<Subgraph> Read(const std::string& filename);
-    static std::unique_ptr<Subgraph> ReadFromText(const std::string& filename);
+    Subgraph(const Subgraph& other);
+    static auto Read(const std::string& filename) -> std::unique_ptr<Subgraph>;
+    static auto ReadFromText(const std::string& filename) -> std::unique_ptr<Subgraph>;
     void Write(const std::string& filename) const;
     void WriteAsText(const std::string& filename) const;
 

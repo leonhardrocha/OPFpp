@@ -12,7 +12,6 @@ if(NOT CMAKE_CXX_STANDARD)
     set(CMAKE_CXX_EXTENSIONS OFF)
 endif()
 
-
 ## Python development components Starting with CMake 3.12
 # Use the CMake-provided FindPython module to locate Python and its development components.
 # This is required to build Python extensions and link against the Python library.
@@ -22,8 +21,11 @@ link_libraries(pybind11 PRIVATE Python::Python)
 # Find dependencies provided by Conan.
 # The Conan-generated CMakeDeps files make this possible.
 # Add the Conan generators folder to the search path
+
 find_package(GTest REQUIRED)
 find_package(pybind11 REQUIRED)
+find_package(nlohmann_json CONFIG REQUIRED)
+
 # 3. Create your module
 # Add project subdirectories.
 # Their CMakeLists should link against the targets provided by find_package

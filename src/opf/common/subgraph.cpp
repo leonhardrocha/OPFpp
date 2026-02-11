@@ -128,11 +128,12 @@ Subgraph *ReadSubgraph(char *file){
   return g;
 }
 
-// Copy subgraph (does not copy Arcs)
-std::unique_ptr<Subgraph> CopySubgraph(Subgraph& g){
-    Subgraph clone =  Subgraph(g);  
-    return std::make_unique<Subgraph>(clone);
-}
+// // Copy subgraph (does not copy Arcs)
+// std::unique_ptr<Subgraph> CopySubgraph(Subgraph& g){
+//     Subgraph clone =  Subgraph(g);  
+//     return std::make_unique<Subgraph>(clone);
+// }
+
 //Copy nodes
 void CopySNode(SNode& dest, SNode& src, int nfeats){
 	dest.feat = AllocFloatArray(nfeats);

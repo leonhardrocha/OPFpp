@@ -39,7 +39,7 @@ Subgraph::DistanceFunction opf_ArcWeight = Subgraph::EuclideanDistance;
 
 /*--------- Supervised OPF -------------------------------------*/
 //Training function -----
-void opf_OPFTraining(Subgraph &sg){
+void opf_OPFTraining(Subgraph& sg){
   int p,q, i;
   float tmp,weight;
   std::vector<float> pathval(sg.nodes.size());
@@ -133,22 +133,22 @@ Subgraph *opf_OPFSemiLearning(Subgraph& sg, Subgraph& nonsg, Subgraph& sgeval){
   int p,q, i, cont;
   float tmp,weight;
 
-  Subgraph merged = opf_MergeSubgraph(sg,nonsg);
+  std::unique_ptr<Subgraph> merged = opf_MergeSubgraph(sg, nonsg);
   cont = 0;
 
-  if(sgeval != NULL) {
+  if(sgeval.nodes.size() > 0) {
 	
-	//Learning from errors in the evaluation set
-	opf_OPFLearning(&merged, &sgeval);
-	
-	for (i = 0; i < sg->nnodes; i++) {
-		CopySNode(&sg->node[i], &merged->node[i], sg->nfeats);
-	}
-	
-	for (i = ((merged->nnodes)-(nonsg->nnodes)); i < merged->nnodes; i++) {
-		CopySNode(&nonsg->node[cont], &merged->node[i], nonsg->nfeats);
-		cont++;
-	}
+    //Learning from errors in the evaluation set
+    opf_OPFLearning(merged, sgeval);
+    
+    for (i = 0; i < sg.nodes.size(); i++) {
+      CopySNode(sg.nodes[i], merged->nodes[i], sg.nfeats);
+    }
+    
+    for (i = ((merged->nnodes)-(nonsg.nnodes)); i < merged->nnodes; i++) {
+      CopySNode(nonsg.nodes[cont], merged->nodes[i], nonsg.nfeats);
+      cont++;
+    }
   }
   
   // compute optimum prototypes
@@ -204,19 +204,19 @@ Subgraph *opf_OPFSemiLearning(Subgraph& sg, Subgraph& nonsg, Subgraph& sgeval){
 // Classification function ----- it classifies nodes of sg by using
 // the OPF-clustering labels from sgtrain
 
-void opf_OPFKNNClassify(Subgraph *sgtrain, Subgraph *sg){
+void opf_OPFKNNClassify(Subgraph& sgtrain, Subgraph& sg){
   int   i, j, k;
   float weight;
 
-  for (i = 0; i < sg->nnodes; i++){
+  for (i = 0; i < sg.nnodes; i++){
     for (j = 0; (j < sgtrain->nnodes); j++){
       k = sgtrain->ordered_list_of_nodes[j];
       if(!opf_PrecomputedDistance)
-	weight = opf_ArcWeight(sgtrain->node[k].feat,sg->node[i].feat,sg->nfeats);
+	weight = opf_ArcWeight(sgtrain->node[k].feat,sg.node[i].feat,sg.nfeats);
       else
-	weight = opf_DistanceValue[sgtrain->node[k].position][sg->node[i].position];
+	weight = opf_DistanceValue[sgtrain->node[k].position][sg.node[i].position];
       if (weight <= sgtrain->node[k].radius){
-	sg->node[i].label = sgtrain->node[k].label;
+	sg.node[i].label = sgtrain->node[k].label;
 	break;
       }
     }
@@ -227,20 +227,23 @@ void opf_OPFKNNClassify(Subgraph *sgtrain, Subgraph *sg){
 //Learning function: it executes the learning procedure for CompGraph replacing the
 //missclassified samples in the evaluation set by non prototypes from
 //training set -----
-void opf_OPFLearning(std::unique_ptr<Subgraph>& sgtrain, std::unique_ptr<Subgraph>& sgeval){
+void opf_OPFLearning(Subgraph& sgtrain, Subgraph& sgeval){
 	int i = 0, iterations = 10;
-	float Acc = FLT_MIN, AccAnt = FLT_MIN,MaxAcc=FLT_MIN, delta;
-	std::unique_ptr<Subgraph> sg;
+  float Acc = std::numeric_limits<float>::min();
+  float AccAnt = std::numeric_limits<float>::min();
+  float MaxAcc = std::numeric_limits<float>::min();
+  float delta;
+  std::unique_ptr<Subgraph> sg;
 
 	do{
 		AccAnt = Acc;
 		fflush(stdout); fprintf(stdout, "\nrunning iteration ... %d ", i);
-		opf_OPFTraining(*sgtrain);
-		opf_OPFClassifying(*sgtrain, *sgeval);
-		Acc = opf_Accuracy(*sgeval);
+		opf_OPFTraining(sgtrain);
+		opf_OPFClassifying(sgtrain, sgeval);
+		Acc = opf_Accuracy(sgeval);
 		if (Acc > MaxAcc){
 		  MaxAcc = Acc;
-		  sg = std::make_unique<Subgraph>();
+		  sg = sgtrain.copy()
           *sg = *sgtrain;
 		}
 		opf_SwapErrorsbyNonPrototypes(*sgtrain, *sgeval);
@@ -252,7 +255,7 @@ void opf_OPFLearning(std::unique_ptr<Subgraph>& sgtrain, std::unique_ptr<Subgrap
 }
 
 
-void opf_OPFAgglomerativeLearning(std::unique_ptr<Subgraph>& sgtrain, std::unique_ptr<Subgraph>& sgeval){
+void opf_OPFAgglomerativeLearning(Subgraph& sgtrain, Subgraph& sgeval){
     int n, i = 1;
     float Acc;
 
@@ -260,9 +263,9 @@ void opf_OPFAgglomerativeLearning(std::unique_ptr<Subgraph>& sgtrain, std::uniqu
     do{
         fflush(stdout); fprintf(stdout, "\nrunning iteration ... %d ", i++);
         n = 0;
-        opf_OPFTraining(*sgtrain);
-        opf_OPFClassifying(*sgtrain, *sgeval);
-        Acc = opf_Accuracy(*sgeval); fprintf(stdout," %f",Acc*100);
+        opf_OPFTraining(sgtrain);
+        opf_OPFClassifying(sgtrain, sgeval);
+        Acc = opf_Accuracy(sgeval); fprintf(stdout," %f",Acc*100);
         opf_MoveMisclassifiedNodes(sgeval, sgtrain, n);
         fprintf(stdout,"\nMisclassified nodes: %d",n);
     }while(n);
@@ -272,36 +275,36 @@ void opf_OPFAgglomerativeLearning(std::unique_ptr<Subgraph>& sgtrain, std::uniqu
 //Training function: it computes unsupervised training for the
 //pre-computed best k.
 
-void opf_OPFClustering(Subgraph *sg){
+void opf_OPFClustering(Subgraph& sg){
     int p, q, l;
     float tmp;
-    std::vector<float> pathval(sg->nodes.size());
-    RealHeap Q(sg->nodes.size(), pathval, RealHeap::Policy::MAX_VALUE);
+    std::vector<float> pathval(sg.nodes.size());
+    RealHeap Q(sg.nodes.size(), pathval, RealHeap::Policy::MAX_VALUE);
 
     // Add arcs to guarantee symmetry on plateaus
-    for (size_t i = 0; i < sg->nodes.size(); i++) {
-        for (int j : sg->nodes[i].adj) {
-            if (sg->nodes[i].dens == sg->nodes[j].dens) {
+    for (size_t i = 0; i < sg.nodes.size(); i++) {
+        for (int j : sg.nodes[i].adj) {
+            if (sg.nodes[i].dens == sg.nodes[j].dens) {
                 // insert i in the adjacency of j if it is not there.
                 bool found = false;
-                for (int neighbor : sg->nodes[j].adj) {
+                for (int neighbor : sg.nodes[j].adj) {
                     if (neighbor == static_cast<int>(i)) {
                         found = true;
                         break;
                     }
                 }
                 if (!found) {
-                    sg->nodes[j].adj.push_back(i);
+                    sg.nodes[j].adj.push_back(i);
                 }
             }
         }
     }
 
     // Compute clustering
-    for (size_t i = 0; i < sg->nodes.size(); ++i) {
-        pathval[i] = sg->nodes[i].pathval;
-        sg->nodes[i].pred = NIL;
-        sg->nodes[i].root = i;
+    for (size_t i = 0; i < sg.nodes.size(); ++i) {
+        pathval[i] = sg.nodes[i].pathval;
+        sg.nodes[i].pred = NIL;
+        sg.nodes[i].root = i;
         Q.Insert(i);
     }
 
@@ -309,30 +312,30 @@ void opf_OPFClustering(Subgraph *sg){
     int i = 0;
     while (!Q.IsEmpty()) {
         p = Q.Remove();
-        sg->ordered_list_of_nodes[i] = p;
+        sg.ordered_list_of_nodes[i] = p;
         i++;
 
-        if (sg->nodes[p].pred == NIL) {
-            pathval[p] = sg->nodes[p].dens;
-            sg->nodes[p].label = l;
+        if (sg.nodes[p].pred == NIL) {
+            pathval[p] = sg.nodes[p].dens;
+            sg.nodes[p].label = l;
             l++;
         }
 
-        sg->nodes[p].pathval = pathval[p];
-        for (int q_neighbor : sg->nodes[p].adj) {
+        sg.nodes[p].pathval = pathval[p];
+        for (int q_neighbor : sg.nodes[p].adj) {
             if (Q.GetColor(q_neighbor) != RealHeap::BLACK) {
-                tmp = MIN(pathval[p], sg->nodes[q_neighbor].dens);
+                tmp = MIN(pathval[p], sg.nodes[q_neighbor].dens);
                 if (tmp > pathval[q_neighbor]) {
                     Q.Update(q_neighbor, tmp);
-                    sg->nodes[q_neighbor].pred = p;
-                    sg->nodes[q_neighbor].root = sg->nodes[p].root;
-                    sg->nodes[q_neighbor].label = sg->nodes[p].label;
+                    sg.nodes[q_neighbor].pred = p;
+                    sg.nodes[q_neighbor].root = sg.nodes[p].root;
+                    sg.nodes[q_neighbor].label = sg.nodes[p].label;
                 }
             }
         }
     }
 
-    sg->nlabels = l;
+    sg.nlabels = l;
 }
 
 /*------------ Auxiliary functions ------------------------------ */
@@ -340,16 +343,11 @@ void opf_OPFClustering(Subgraph *sg){
 void opf_ResetSubgraph(Subgraph& sg){
   for (auto& node : sg.nodes)
     node.pred = NIL;
-  
-  for (auto& node : sg.nodes)
-  {
-      node.nplatadj = 0;
-      node.adj.clear();
-  }
+  sg.DestroyArcs();
 }
 
 //Replace errors from evaluating set by non prototypes from training set
-void opf_SwapErrorsbyNonPrototypes(Subgraph &sgtrain, Subgraph &sgeval){
+void opf_SwapErrorsbyNonPrototypes(Subgraph& sgtrain, Subgraph& sgeval){
   int j, counter, nonprototypes = 0, nerrors = 0;
 
   for (size_t i = 0; i < sgtrain.nodes.size(); i++){
@@ -390,25 +388,25 @@ void opf_MarkNodes(Subgraph *g, int i){
 }
 
 // Remove irrelevant nodes
-void opf_RemoveIrrelevantNodes(std::unique_ptr<Subgraph>& sg){
+void opf_RemoveIrrelevantNodes(Subgraph& sg){
   
   std::vector<SNode> relevant_nodes;
-  for(const auto& node : sg->nodes) {
+  for(const auto& node : sg.nodes) {
     if (node.relevant) {
       relevant_nodes.push_back(node);
     }
   }
 
-  if (relevant_nodes.size() < sg->nodes.size()){
-    auto newsg = std::make_unique<Subgraph>(relevant_nodes.size(), sg->nfeats, sg->nlabels);
-    newsg->nodes = std::move(relevant_nodes);
+  if (relevant_nodes.size() < sg.nodes.size()){
+    auto newsg = std::make_unique<Subgraph>(relevant_nodes.size(), sg.nfeats, sg.nlabels);
+    newsg.nodes = std::move(relevant_nodes);
     
     sg = std::move(newsg);
   }
 }
 
 //Move irrelevant nodes from source graph (src) to destiny graph (dst)
-void opf_MoveIrrelevantNodes(std::unique_ptr<Subgraph>& src, std::unique_ptr<Subgraph>& dst){
+void opf_MoveIrrelevantNodes(Subgraph& src, Subgraph& dst){
   
   std::vector<SNode> irrelevant_nodes;
   std::vector<SNode> relevant_nodes;
@@ -436,7 +434,7 @@ void opf_MoveIrrelevantNodes(std::unique_ptr<Subgraph>& src, std::unique_ptr<Sub
 }
 
 //Move misclassified nodes from source graph (src) to destiny graph (dst)
-void opf_MoveMisclassifiedNodes(std::unique_ptr<Subgraph>& src, std::unique_ptr<Subgraph>& dst, int& p) {
+void opf_MoveMisclassifiedNodes(Subgraph& src, Subgraph& dst, int& p) {
     std::vector<SNode> misclassified;
     
     auto it = std::stable_partition(src->nodes.begin(), src->nodes.end(), [](const SNode& node) {
@@ -467,22 +465,22 @@ Subgraph *opf_ReadModelFile(char *file){
 }
 
 //normalize features
-void opf_NormalizeFeatures(Subgraph *sg){
-  float *mean = (float *)calloc(sg->nfeats,sizeof(float)), *std = (float *)calloc(sg->nfeats, sizeof(int));
+void opf_NormalizeFeatures(Subgraph& sg){
+  float *mean = (float *)calloc(sg.nfeats,sizeof(float)), *std = (float *)calloc(sg.nfeats, sizeof(int));
   int i,j;
 
-  for (i = 0; i < sg->nfeats; i++){
-    for (j = 0; j < sg->nnodes; j++)
-      mean[i]+=sg->node[j].feat[i]/sg->nnodes;
-    for (j = 0; j < sg->nnodes; j++)
-      std[i]+=pow(sg->node[j].feat[i]-mean[i],2)/sg->nnodes;
+  for (i = 0; i < sg.nfeats; i++){
+    for (j = 0; j < sg.nnodes; j++)
+      mean[i]+=sg.node[j].feat[i]/sg.nnodes;
+    for (j = 0; j < sg.nnodes; j++)
+      std[i]+=pow(sg.node[j].feat[i]-mean[i],2)/sg.nnodes;
     std[i]=sqrt(std[i]);
 	if(std[i] == 0) 	std[i] = 1.0;
   }
 
-  for (i = 0; i < sg->nfeats; i++){
-    for (j = 0; j < sg->nnodes; j++)
-      sg->node[j].feat[i] = (sg->node[j].feat[i]-mean[i])/std[i];
+  for (i = 0; i < sg.nfeats; i++){
+    for (j = 0; j < sg.nnodes; j++)
+      sg.node[j].feat[i] = (sg.node[j].feat[i]-mean[i])/std[i];
   }
 
   free(mean);
@@ -490,7 +488,7 @@ void opf_NormalizeFeatures(Subgraph *sg){
 }
 
 // Find prototypes by the MST approach
-void opf_MSTPrototypes(Subgraph &sg){
+void opf_MSTPrototypes(Subgraph& sg){
   int p,q;
   float weight;
   int  pred;
@@ -547,21 +545,21 @@ void opf_MSTPrototypes(Subgraph &sg){
 }
 
 //It creates k folds for cross validation
-Subgraph **kFoldSubgraph(Subgraph *sg, int k){
+Subgraph **kFoldSubgraph(Subgraph& sg, int k){
 	Subgraph **out = (Subgraph **)malloc(k*sizeof(Subgraph *));
-	int totelems, foldsize = 0, i, *label = (int *)calloc((sg->nlabels+1),sizeof(int));
-	int *nelems = (int *)calloc((sg->nlabels+1),sizeof(int)), j, z, w, m, n;
-	int *nelems_aux = (int *)calloc((sg->nlabels+1),sizeof(int)), *resto = (int *)calloc((sg->nlabels+1),sizeof(int));
+	int totelems, foldsize = 0, i, *label = (int *)calloc((sg.nlabels+1),sizeof(int));
+	int *nelems = (int *)calloc((sg.nlabels+1),sizeof(int)), j, z, w, m, n;
+	int *nelems_aux = (int *)calloc((sg.nlabels+1),sizeof(int)), *resto = (int *)calloc((sg.nlabels+1),sizeof(int));
 
-	for (i=0; i < sg->nnodes; i++){
-	    sg->node[i].status = 0;
-	    label[sg->node[i].truelabel]++;
+	for (i=0; i < sg.nnodes; i++){
+	    sg.node[i].status = 0;
+	    label[sg.node[i].truelabel]++;
 	}
 
-	for (i=0; i < sg->nnodes; i++)
-	    nelems[sg->node[i].truelabel]=MAX((int)((1/(float)k)*label[sg->node[i].truelabel]),1);
+	for (i=0; i < sg.nnodes; i++)
+	    nelems[sg.node[i].truelabel]=MAX((int)((1/(float)k)*label[sg.node[i].truelabel]),1);
 
-	for (i = 1; i <= sg->nlabels; i++){
+	for (i = 1; i <= sg.nlabels; i++){
 		foldsize+=nelems[i];
 	    	nelems_aux[i]=nelems[i];
 		resto[i] = label[i] - k*nelems_aux[i];
@@ -569,60 +567,60 @@ Subgraph **kFoldSubgraph(Subgraph *sg, int k){
 
 	for (i = 0; i < k-1; i++){
 		out[i] = CreateSubgraph(foldsize);
-		out[i]->nfeats = sg->nfeats;
-		out[i]->nlabels = sg->nlabels;
+		out[i]->nfeats = sg.nfeats;
+		out[i]->nlabels = sg.nlabels;
 		for (j = 0; j < foldsize; j++)
-			out[i]->node[j].feat = (float *)malloc(sg->nfeats*sizeof(float));
+			out[i]->node[j].feat = (float *)malloc(sg.nfeats*sizeof(float));
 	}
 
 	totelems = 0;
-	for (j = 1; j <= sg->nlabels; j++)
+	for (j = 1; j <= sg.nlabels; j++)
 		totelems+=resto[j];
 
 	out[i] = CreateSubgraph(foldsize+totelems);
-	out[i]->nfeats = sg->nfeats;
-	out[i]->nlabels = sg->nlabels;
+	out[i]->nfeats = sg.nfeats;
+	out[i]->nlabels = sg.nlabels;
 
 	for (j = 0; j < foldsize+totelems; j++)
-			out[i]->node[j].feat = (float *)malloc(sg->nfeats*sizeof(float));
+			out[i]->node[j].feat = (float *)malloc(sg.nfeats*sizeof(float));
 
 	for (i = 0; i < k; i++){
 		totelems=0;
 		if (i == k-1){
-			for (w = 1; w <= sg->nlabels; w++){
+			for (w = 1; w <= sg.nlabels; w++){
 	    			nelems_aux[w]+=resto[w];
 				totelems += nelems_aux[w];
 			}
 		}
 		else{
-			for (w = 1; w <= sg->nlabels; w++)
+			for (w = 1; w <= sg.nlabels; w++)
 				totelems += nelems_aux[w];
 		}
 
-		for (w = 1; w <= sg->nlabels; w++)
+		for (w = 1; w <= sg.nlabels; w++)
 	    		nelems[w]=nelems_aux[w];
 
 
 		z = 0;	m = 0;
 		while(totelems > 0){
 			if(i == k-1){
-				for (w = m; w < sg->nnodes; w++){
-					if (sg->node[w].status != NIL){
+				for (w = m; w < sg.nnodes; w++){
+					if (sg.node[w].status != NIL){
 						j = w;
 						m = w+1;
 						break;
 					}
 				}
 
-			}else j = RandomInteger(0,sg->nnodes-1);
-			if (sg->node[j].status!=NIL){
-				if (nelems[sg->node[j].truelabel]>0){
-					out[i]->node[z].position = sg->node[j].position;
-					for (n=0; n < sg->nfeats; n++)
-						out[i]->node[z].feat[n]=sg->node[j].feat[n];
-					out[i]->node[z].truelabel = sg->node[j].truelabel;
-					nelems[sg->node[j].truelabel] = nelems[sg->node[j].truelabel] - 1;
-					sg->node[j].status = NIL;
+			}else j = RandomInteger(0,sg.nnodes-1);
+			if (sg.node[j].status!=NIL){
+				if (nelems[sg.node[j].truelabel]>0){
+					out[i]->node[z].position = sg.node[j].position;
+					for (n=0; n < sg.nfeats; n++)
+						out[i]->node[z].feat[n]=sg.node[j].feat[n];
+					out[i]->node[z].truelabel = sg.node[j].truelabel;
+					nelems[sg.node[j].truelabel] = nelems[sg.node[j].truelabel] - 1;
+					sg.node[j].status = NIL;
 					totelems--;
 					z++;
 				}
@@ -639,21 +637,21 @@ Subgraph **kFoldSubgraph(Subgraph *sg, int k){
 }
 
 //It creates k folds for cross validation
-Subgraph **opf_kFoldSubgraph(Subgraph *sg, int k){
+Subgraph **opf_kFoldSubgraph(Subgraph& sg, int k){
 	Subgraph **out = (Subgraph **)malloc(k*sizeof(Subgraph *));
-	int totelems, foldsize = 0, i, *label = (int *)calloc((sg->nlabels+1),sizeof(int));
-	int *nelems = (int *)calloc((sg->nlabels+1),sizeof(int)), j, z, w, m, n;
-	int *nelems_aux = (int *)calloc((sg->nlabels+1),sizeof(int)), *resto = (int *)calloc((sg->nlabels+1),sizeof(int));
+	int totelems, foldsize = 0, i, *label = (int *)calloc((sg.nlabels+1),sizeof(int));
+	int *nelems = (int *)calloc((sg.nlabels+1),sizeof(int)), j, z, w, m, n;
+	int *nelems_aux = (int *)calloc((sg.nlabels+1),sizeof(int)), *resto = (int *)calloc((sg.nlabels+1),sizeof(int));
 
-	for (i=0; i < sg->nnodes; i++){
-	    sg->node[i].status = 0;
-	    label[sg->node[i].truelabel]++;
+	for (i=0; i < sg.nnodes; i++){
+	    sg.node[i].status = 0;
+	    label[sg.node[i].truelabel]++;
 	}
 
-	for (i=0; i < sg->nnodes; i++)
-	    nelems[sg->node[i].truelabel]=MAX((int)((1/(float)k)*label[sg->node[i].truelabel]),1);
+	for (i=0; i < sg.nnodes; i++)
+	    nelems[sg.node[i].truelabel]=MAX((int)((1/(float)k)*label[sg.node[i].truelabel]),1);
 
-	for (i = 1; i <= sg->nlabels; i++){
+	for (i = 1; i <= sg.nlabels; i++){
 		foldsize+=nelems[i];
 	    	nelems_aux[i]=nelems[i];
 		resto[i] = label[i] - k*nelems_aux[i];
@@ -661,60 +659,60 @@ Subgraph **opf_kFoldSubgraph(Subgraph *sg, int k){
 
 	for (i = 0; i < k-1; i++){
 		out[i] = CreateSubgraph(foldsize);
-		out[i]->nfeats = sg->nfeats;
-		out[i]->nlabels = sg->nlabels;
+		out[i]->nfeats = sg.nfeats;
+		out[i]->nlabels = sg.nlabels;
 		for (j = 0; j < foldsize; j++)
-			out[i]->node[j].feat = (float *)malloc(sg->nfeats*sizeof(float));
+			out[i]->node[j].feat = (float *)malloc(sg.nfeats*sizeof(float));
 	}
 
 	totelems = 0;
-	for (j = 1; j <= sg->nlabels; j++)
+	for (j = 1; j <= sg.nlabels; j++)
 		totelems+=resto[j];
 
 	out[i] = CreateSubgraph(foldsize+totelems);
-	out[i]->nfeats = sg->nfeats;
-	out[i]->nlabels = sg->nlabels;
+	out[i]->nfeats = sg.nfeats;
+	out[i]->nlabels = sg.nlabels;
 
 	for (j = 0; j < foldsize+totelems; j++)
-			out[i]->node[j].feat = (float *)malloc(sg->nfeats*sizeof(float));
+			out[i]->node[j].feat = (float *)malloc(sg.nfeats*sizeof(float));
 
 	for (i = 0; i < k; i++){
 		totelems=0;
 		if (i == k-1){
-			for (w = 1; w <= sg->nlabels; w++){
+			for (w = 1; w <= sg.nlabels; w++){
 	    			nelems_aux[w]+=resto[w];
 				totelems += nelems_aux[w];
 			}
 		}
 		else{
-			for (w = 1; w <= sg->nlabels; w++)
+			for (w = 1; w <= sg.nlabels; w++)
 				totelems += nelems_aux[w];
 		}
 
-		for (w = 1; w <= sg->nlabels; w++)
+		for (w = 1; w <= sg.nlabels; w++)
 	    		nelems[w]=nelems_aux[w];
 
 
 		z = 0;	m = 0;
 		while(totelems > 0){
 			if(i == k-1){
-				for (w = m; w < sg->nnodes; w++){
-					if (sg->node[w].status != NIL){
+				for (w = m; w < sg.nnodes; w++){
+					if (sg.node[w].status != NIL){
 						j = w;
 						m = w+1;
 						break;
 					}
 				}
 
-			}else j = RandomInteger(0,sg->nnodes-1);
-			if (sg->node[j].status!=NIL){
-				if (nelems[sg->node[j].truelabel]>0){
-					out[i]->node[z].position = sg->node[j].position;
-					for (n=0; n < sg->nfeats; n++)
-						out[i]->node[z].feat[n]=sg->node[j].feat[n];
-					out[i]->node[z].truelabel = sg->node[j].truelabel;
-					nelems[sg->node[j].truelabel] = nelems[sg->node[j].truelabel] - 1;
-					sg->node[j].status = NIL;
+			}else j = RandomInteger(0,sg.nnodes-1);
+			if (sg.node[j].status!=NIL){
+				if (nelems[sg.node[j].truelabel]>0){
+					out[i]->node[z].position = sg.node[j].position;
+					for (n=0; n < sg.nfeats; n++)
+						out[i]->node[z].feat[n]=sg.node[j].feat[n];
+					out[i]->node[z].truelabel = sg.node[j].truelabel;
+					nelems[sg.node[j].truelabel] = nelems[sg.node[j].truelabel] - 1;
+					sg.node[j].status = NIL;
 					totelems--;
 					z++;
 				}
@@ -733,63 +731,63 @@ Subgraph **opf_kFoldSubgraph(Subgraph *sg, int k){
 
 // Split subgraph into two parts such that the size of the first part
 // is given by a percentual of samples.
-void opf_SplitSubgraph(Subgraph *sg, Subgraph **sg1, Subgraph **sg2, float perc1){
-  int *label=AllocIntArray(sg->nlabels+1),i,j,i1,i2;
-  int *nelems=AllocIntArray(sg->nlabels+1),totelems;
+void opf_SplitSubgraph(Subgraph& sg, Subgraph **sg1, Subgraph **sg2, float perc1){
+  int *label=AllocIntArray(sg.nlabels+1),i,j,i1,i2;
+  int *nelems=AllocIntArray(sg.nlabels+1),totelems;
   srandom((int)time(NULL));
 
-  for (i=0; i < sg->nnodes; i++) {
-    sg->node[i].status = 0;
-    label[sg->node[i].truelabel]++;
+  for (i=0; i < sg.nnodes; i++) {
+    sg.node[i].status = 0;
+    label[sg.node[i].truelabel]++;
   }
 
-  for (i=0; i < sg->nnodes; i++) {
-    nelems[sg->node[i].truelabel]=MAX((int)(perc1*label[sg->node[i].truelabel]),1);
+  for (i=0; i < sg.nnodes; i++) {
+    nelems[sg.node[i].truelabel]=MAX((int)(perc1*label[sg.node[i].truelabel]),1);
   }
 
   free(label);
 
   totelems=0;
-  for (j=1; j <= sg->nlabels; j++)
+  for (j=1; j <= sg.nlabels; j++)
     totelems += nelems[j];
 
   *sg1 = CreateSubgraph(totelems);
-  *sg2 = CreateSubgraph(sg->nnodes-totelems);
-  (*sg1)->nfeats = sg->nfeats;
-  (*sg2)->nfeats = sg->nfeats;
+  *sg2 = CreateSubgraph(sg.nnodes-totelems);
+  (*sg1)->nfeats = sg.nfeats;
+  (*sg2)->nfeats = sg.nfeats;
 
   for (i1=0; i1 < (*sg1)->nnodes; i1++)
     (*sg1)->node[i1].feat = AllocFloatArray((*sg1)->nfeats);
   for (i2=0; i2 < (*sg2)->nnodes; i2++)
     (*sg2)->node[i2].feat = AllocFloatArray((*sg2)->nfeats);
 
-  (*sg1)->nlabels = sg->nlabels;
-  (*sg2)->nlabels = sg->nlabels;
+  (*sg1)->nlabels = sg.nlabels;
+  (*sg2)->nlabels = sg.nlabels;
 
   i1=0;
   while(totelems > 0){
-    i = RandomInteger(0,sg->nnodes-1);
-    if (sg->node[i].status!=NIL){
-      if (nelems[sg->node[i].truelabel]>0){// copy node to sg1
-	(*sg1)->node[i1].position = sg->node[i].position;
+    i = RandomInteger(0,sg.nnodes-1);
+    if (sg.node[i].status!=NIL){
+      if (nelems[sg.node[i].truelabel]>0){// copy node to sg1
+	(*sg1)->node[i1].position = sg.node[i].position;
 	for (j=0; j < (*sg1)->nfeats; j++)
-	  (*sg1)->node[i1].feat[j]=sg->node[i].feat[j];
-	(*sg1)->node[i1].truelabel = sg->node[i].truelabel;
+	  (*sg1)->node[i1].feat[j]=sg.node[i].feat[j];
+	(*sg1)->node[i1].truelabel = sg.node[i].truelabel;
 	i1++;
-	nelems[sg->node[i].truelabel] = nelems[sg->node[i].truelabel] - 1;
-	sg->node[i].status = NIL;
+	nelems[sg.node[i].truelabel] = nelems[sg.node[i].truelabel] - 1;
+	sg.node[i].status = NIL;
 	totelems--;
       }
     }
   }
 
   i2=0;
-  for (i=0; i < sg->nnodes; i++){
-    if (sg->node[i].status!=NIL){
-      (*sg2)->node[i2].position = sg->node[i].position;
+  for (i=0; i < sg.nnodes; i++){
+    if (sg.node[i].status!=NIL){
+      (*sg2)->node[i2].position = sg.node[i].position;
       for (j=0; j < (*sg2)->nfeats; j++)
-	(*sg2)->node[i2].feat[j]=sg->node[i].feat[j];
-      (*sg2)->node[i2].truelabel = sg->node[i].truelabel;
+	(*sg2)->node[i2].feat[j]=sg.node[i].feat[j];
+      (*sg2)->node[i2].truelabel = sg.node[i].truelabel;
       i2++;
     }
   }
@@ -839,19 +837,19 @@ float opf_Accuracy(const Subgraph& sg){
     else
         Acc = 1.0;
 
-	return(Acc);
+	return;
 }
 
 // Compute the confusion matrix
-int **opf_ConfusionMatrix(Subgraph *sg){
+int **opf_ConfusionMatrix(Subgraph& sg){
 	int **opf_ConfusionMatrix = NULL, i;
 
-	opf_ConfusionMatrix = (int **)calloc((sg->nlabels+1),sizeof(int *));
-	for (i = 1; i <= sg->nlabels; i++)
-		opf_ConfusionMatrix[i] = (int *)calloc((sg->nlabels+1),sizeof(int));
+	opf_ConfusionMatrix = (int **)calloc((sg.nlabels+1),sizeof(int *));
+	for (i = 1; i <= sg.nlabels; i++)
+		opf_ConfusionMatrix[i] = (int *)calloc((sg.nlabels+1),sizeof(int));
 
-	for (i = 0; i < sg->nnodes; i++)
-		opf_ConfusionMatrix[sg->node[i].truelabel][sg->node[i].label]++;
+	for (i = 0; i < sg.nnodes; i++)
+		opf_ConfusionMatrix[sg.node[i].truelabel][sg.node[i].label]++;
 
 	return opf_ConfusionMatrix;
 }
@@ -891,38 +889,38 @@ float **opf_ReadDistances(char *fileName, int *n)
 }
 
 // Normalized cut
-float opf_NormalizedCut( Subgraph *sg ){
+float opf_NormalizedCut( Subgraph& sg ){
     int l, p, q;
     float ncut, dist;
-    std::vector<float> acumIC(sg->nlabels, 0.0f); //acumulate weights inside each class
-    std::vector<float> acumEC(sg->nlabels, 0.0f); //acumulate weights between the class and a distinct one
+    std::vector<float> acumIC(sg.nlabels, 0.0f); //acumulate weights inside each class
+    std::vector<float> acumEC(sg.nlabels, 0.0f); //acumulate weights between the class and a distinct one
 
     ncut = 0.0;
 
-    for ( p = 0; p < static_cast<int>(sg->nodes.size()); p++ )
+    for ( p = 0; p < static_cast<int>(sg.nodes.size()); p++ )
     {
-        for ( int q_neighbor : sg->nodes[p].adj )
+        for ( int q_neighbor : sg.nodes[p].adj )
         {
             q = q_neighbor;
 	    if (!opf_PrecomputedDistance)
-	      dist = opf_ArcWeight(sg->nodes[p].feat,sg->nodes[q].feat,sg->nfeats);
+	      dist = opf_ArcWeight(sg.nodes[p].feat,sg.nodes[q].feat,sg.nfeats);
 	    else
-	      dist = opf_DistanceValue[sg->nodes[p].position][sg->nodes[q].position];
+	      dist = opf_DistanceValue[sg.nodes[p].position][sg.nodes[q].position];
             if ( dist > 0.0 )
             {
-                if ( sg->nodes[p].label == sg->nodes[q].label )
+                if ( sg.nodes[p].label == sg.nodes[q].label )
                 {
-                    acumIC[ sg->nodes[p].label ] += 1.0 / dist; // intra-class weight
+                    acumIC[ sg.nodes[p].label ] += 1.0 / dist; // intra-class weight
                 }
                 else   // inter - class weight
                 {
-                    acumEC[ sg->nodes[p].label ] += 1.0 / dist; // inter-class weight
+                    acumEC[ sg.nodes[p].label ] += 1.0 / dist; // inter-class weight
                 }
             }
         }
     }
 
-    for ( l = 0; l < static_cast<int>(sg->nlabels); l++ )
+    for ( l = 0; l < static_cast<int>(sg.nlabels); l++ )
     {
         if ( acumIC[ l ] + acumEC[ l ]  > 0.0 ) ncut += (float) acumEC[ l ] / ( acumIC[ l ] + acumEC[ l ] );
     }
@@ -930,7 +928,7 @@ float opf_NormalizedCut( Subgraph *sg ){
 }
 
 // Estimate the best k by minimum cut
-void opf_BestkMinCut(Subgraph *sg, int kmin, int kmax)
+void opf_BestkMinCut(Subgraph& sg, int kmin, int kmax)
 {
     int k, bestk = kmax;
     float mincut=std::numeric_limits<float>::max(),nc;
@@ -940,8 +938,8 @@ void opf_BestkMinCut(Subgraph *sg, int kmin, int kmax)
     // Find the best k
     for (k = kmin; (k <= kmax)&&(mincut != 0.0); k++)
     {
-        sg->df = maxdists[k-1];
-        sg->bestk = k;
+        sg.df = maxdists[k-1];
+        sg.bestk = k;
 
 		opf_PDFtoKmax(sg);
 
@@ -956,159 +954,48 @@ void opf_BestkMinCut(Subgraph *sg, int kmin, int kmax)
         }
     }
     free(maxdists);
-    opf_DestroyArcs(sg);
+    sg.DestroyArcs();
 
-    sg->bestk = bestk;
+    sg.bestk = bestk;
 
-    opf_CreateArcs(sg,sg->bestk);
-    opf_PDF(sg);
+    sg.CreateArcs(sg.bestk);
+    sg.ComputePDF();
 
-    printf("best k %d ",sg->bestk);
-}
-
-
-// Create adjacent list in subgraph: a knn graph
-void opf_CreateArcs(Subgraph *sg, int knn){
-    int    j,l,k;
-    float  dist;
-    std::vector<int> nn(knn + 1);
-    std::vector<float> d(knn + 1);
-
-    /* Create graph with the knn-nearest neighbors */
-
-    sg->df=0.0;
-    for (size_t i=0; i < sg->nodes.size(); i++)
-    {
-        for (l=0; l < knn; l++)
-            d[l]=std::numeric_limits<float>::max();
-        for (j=0; j < static_cast<int>(sg->nodes.size()); j++)
-        {
-            if (j!=static_cast<int>(i))
-            {
-	      if (!opf_PrecomputedDistance)
-		d[knn] = opf_ArcWeight(sg->nodes[i].feat,sg->nodes[j].feat,sg->nfeats);
-	      else
-		d[knn] = opf_DistanceValue[sg->nodes[i].position][sg->nodes[j].position];
-	      nn[knn]= j;
-	      k      = knn;
-	      while ((k > 0)&&(d[k]<d[k-1]))
-                {
-		  dist    = d[k];
-		  l       = nn[k];
-		  d[k]    = d[k-1];
-		  nn[k]   = nn[k-1];
-		  d[k-1]  = dist;
-		  nn[k-1] = l;
-		  k--;
-                }
-            }
-        }
-
-        for (l=0; l < knn; l++)
-        {
-            if (d[l]!=INT_MAX)
-            {
-                if (d[l] > sg->df)
-                    sg->df = d[l];
-		sg->nodes[i].radius = d[l];
-                sg->nodes[i].adj.push_back(nn[l]);
-            }
-        }
-    }
-
-    if (sg->df<0.00001)
-        sg->df = 1.0;
-}
-
-// Destroy Arcs
-void opf_DestroyArcs(Subgraph &sg){
-    for (auto& node : sg.nodes)
-    {
-        node.nplatadj = 0;
-        node.adj.clear();
-    }
-}
-
-// opf_PDF computation
-void opf_PDF(Subgraph *sg){
-    double  dist;
-    std::vector<float> value(sg->nodes.size());
-
-    sg->K    = (2.0*(float)sg->df/9.0);
-    sg->mindens = std::numeric_limits<float>::max();
-    sg->maxdens = FLT_MIN;
-    for (size_t i=0; i < sg->nodes.size(); i++)
-    {
-        value[i]=0.0;
-        int nelems=1;
-        for(int neighbor : sg->nodes[i].adj)
-        {
-            if (!opf_PrecomputedDistance)
-	      		dist  = opf_ArcWeight(sg->nodes[i].feat,sg->nodes[neighbor].feat,sg->nfeats);
-            else
-	      		dist  = opf_DistanceValue[sg->nodes[i].position][sg->nodes[neighbor].position];
-            value[i] += exp(-dist/sg->K);
-            nelems++;
-        }
-
-        value[i] = (value[i]/(float)nelems);
-
-        if (value[i] < sg->mindens)
-            sg->mindens = value[i];
-        if (value[i] > sg->maxdens)
-            sg->maxdens = value[i];
-    }
-
-    if (sg->mindens==sg->maxdens)
-    {
-        for (size_t i=0; i < sg->nodes.size(); i++)
-        {
-	  sg->nodes[i].dens = opf_MAXDENS;
-	  sg->nodes[i].pathval= opf_MAXDENS-1;
-        }
-    }
-    else
-      {
-        for (size_t i=0; i < sg->nodes.size(); i++)
-	  {
-	    sg->nodes[i].dens = ((float)(opf_MAXDENS-1)*(value[i]-sg->mindens)/(float)(sg->maxdens-sg->mindens))+1.0;
-            sg->nodes[i].pathval=sg->nodes[i].dens-1;
-        }
-    }
+    printf("best k %d ",sg.bestk);
 }
 
 // Eliminate maxima in the graph with pdf below H
-void opf_ElimMaxBelowH(Subgraph *sg, float H){
+void opf_ElimMaxBelowH(Subgraph& sg, float H){
     int i;
 
     if (H>0.0)
     {
-        for (i=0; i < sg->nnodes; i++)
-            sg->node[i].pathval = MAX(sg->node[i].dens - H,0);
+        for (i=0; i < sg.nnodes; i++)
+            sg.node[i].pathval = MAX(sg.node[i].dens - H,0);
     }
 }
 
 //Eliminate maxima in the graph with area below A
-void opf_ElimMaxBelowArea(Subgraph *sg, int A){
+void opf_ElimMaxBelowArea(Subgraph& sg, int A){
     int i, *area;
 
     area = SgAreaOpen(sg,A);
-    for (i=0; i < sg->nnodes; i++)
+    for (i=0; i < sg.nnodes; i++)
     {
-        sg->node[i].pathval    = MAX(area[i] - 1,0);
+        sg.node[i].pathval    = MAX(area[i] - 1,0);
     }
 
     free(area);
 }
 
 // Eliminate maxima in the graph with volume below V
-void opf_ElimMaxBelowVolume(Subgraph *sg, int V){
+void opf_ElimMaxBelowVolume(Subgraph& sg, int V){
     int i, *volume=NULL;
 
     volume = SgVolumeOpen(sg,V);
-    for (i=0; i < sg->nnodes; i++)
+    for (i=0; i < sg.nnodes; i++)
     {
-        sg->node[i].pathval  = MAX(volume[i] - 1,0);
+        sg.node[i].pathval  = MAX(volume[i] - 1,0);
     }
 
     free(volume);
@@ -1236,7 +1123,7 @@ float opf_BrayCurtisDist(float *f1, float *f2, int n){
 // Create adjacent list in subgraph: a knn graph.
 // Returns an array with the maximum distances
 // for each k=1,2,...,kmax
-float* opf_CreateArcs2(Subgraph *sg, int kmax)
+float* opf_CreateArcs2(Subgraph& sg, int kmax)
 {
     int    j,l,k;
     float  dist;
@@ -1245,19 +1132,19 @@ float* opf_CreateArcs2(Subgraph *sg, int kmax)
     float *maxdists=AllocFloatArray(kmax);
     /* Create graph with the knn-nearest neighbors */
 
-    sg->df=0.0;
-    for (size_t i=0; i < sg->nodes.size(); i++)
+    sg.df=0.0;
+    for (size_t i=0; i < sg.nodes.size(); i++)
     {
         for (l=0; l < kmax; l++)
             d[l]=std::numeric_limits<float>::max();
-        for (j=0; j < static_cast<int>(sg->nodes.size()); j++)
+        for (j=0; j < static_cast<int>(sg.nodes.size()); j++)
         {
             if (j!=static_cast<int>(i))
             {
                 if(!opf_PrecomputedDistance)
-                    d[kmax] = opf_ArcWeight(sg->nodes[i].feat,sg->nodes[j].feat,sg->nfeats);
+                    d[kmax] = opf_ArcWeight(sg.nodes[i].feat,sg.nodes[j].feat,sg.nfeats);
                 else
-                    d[kmax] = opf_DistanceValue[sg->nodes[i].position][sg->nodes[j].position];
+                    d[kmax] = opf_DistanceValue[sg.nodes[i].position][sg.nodes[j].position];
                 nn[kmax]= j;
                 k      = kmax;
                 while ((k > 0)&&(d[k]<d[k-1]))
@@ -1272,55 +1159,55 @@ float* opf_CreateArcs2(Subgraph *sg, int kmax)
                 }
             }
         }
-        sg->nodes[i].radius = 0.0;
-        sg->nodes[i].nplatadj = 0; //zeroing amount of nodes on plateaus
+        sg.nodes[i].radius = 0.0;
+        sg.nodes[i].nplatadj = 0; //zeroing amount of nodes on plateaus
         //making sure that the adjacent nodes be sorted in non-decreasing order
         for (l=kmax-1; l >= 0; l--)
         {
             if (d[l]!=std::numeric_limits<float>::max())
             {
-                if (d[l] > sg->df)
-                    sg->df = d[l];
-                if (d[l] > sg->nodes[i].radius)
-                    sg->nodes[i].radius = d[l];
+                if (d[l] > sg.df)
+                    sg.df = d[l];
+                if (d[l] > sg.nodes[i].radius)
+                    sg.nodes[i].radius = d[l];
                 if(d[l] > maxdists[l])
                     maxdists[l] = d[l];
                 //adding the current neighbor at the beginnig of the list
-                sg->nodes[i].adj.push_front(nn[l]);
+                sg.nodes[i].adj.push_front(nn[l]);
             }
         }
     }
 
-    if (sg->df<0.00001)
-        sg->df = 1.0;
+    if (sg.df<0.00001)
+        sg.df = 1.0;
 
     return maxdists;
 }
 
-// OPFClustering computation only for sg->bestk neighbors
-void opf_OPFClusteringToKmax(Subgraph *sg)
+// OPFClustering computation only for sg.bestk neighbors
+void opf_OPFClusteringToKmax(Subgraph& sg)
 {
     int p, q, l, ki;
-    const int kmax = sg->bestk;
+    const int kmax = sg.bestk;
     float tmp;
-    std::vector<float> pathval(sg->nodes.size());
-    RealHeap Q(sg->nodes.size(), pathval, RealHeap::Policy::MAX_VALUE);
+    std::vector<float> pathval(sg.nodes.size());
+    RealHeap Q(sg.nodes.size(), pathval, RealHeap::Policy::MAX_VALUE);
 
     //   Add arcs to guarantee symmetry on plateaus
-    for (size_t i=0; i < sg->nodes.size(); i++)
+    for (size_t i=0; i < sg.nodes.size(); i++)
     {
-        auto it = sg->nodes[i].adj.begin();
+        auto it = sg.nodes[i].adj.begin();
         ki = 1;
-        while (ki <= kmax && it != sg->nodes[i].adj.end())
+        while (ki <= kmax && it != sg.nodes[i].adj.end())
         {
             int j = *it;
-            if (sg->nodes[i].dens==sg->nodes[j].dens)
+            if (sg.nodes[i].dens==sg.nodes[j].dens)
             {
                 // insert i in the adjacency of j if it is not there.
                 bool found = false;
-                auto it_j = sg->nodes[j].adj.begin();
+                auto it_j = sg.nodes[j].adj.begin();
                 int kj = 1;
-                while(kj <= kmax && it_j != sg->nodes[j].adj.end()){
+                while(kj <= kmax && it_j != sg.nodes[j].adj.end()){
                     if (static_cast<int>(i) == *it_j)
                     {
                         found=true;
@@ -1332,8 +1219,8 @@ void opf_OPFClusteringToKmax(Subgraph *sg)
 
                 if (!found)
                 {
-                    sg->nodes[j].adj.push_front(static_cast<int>(i)); // To be consistent with InsertSet logic
-                    sg->nodes[j].nplatadj++; //number of adjacent nodes on
+                    sg.nodes[j].adj.push_front(static_cast<int>(i)); // To be consistent with InsertSet logic
+                    sg.nodes[j].nplatadj++; //number of adjacent nodes on
                                             //plateaus (includes adjacent plateau
                                             //nodes computed for previous kmax's)
                 }
@@ -1344,11 +1231,11 @@ void opf_OPFClusteringToKmax(Subgraph *sg)
     }
 
     // Compute clustering
-    for (p = 0; p < static_cast<int>(sg->nodes.size()); p++)
+    for (p = 0; p < static_cast<int>(sg.nodes.size()); p++)
     {
-        pathval[p] = sg->nodes[p].pathval;
-        sg->nodes[p].pred  = NIL;
-        sg->nodes[p].root  = p;
+        pathval[p] = sg.nodes[p].pathval;
+        sg.nodes[p].pred  = NIL;
+        sg.nodes[p].root  = p;
         Q.Insert(p);
     }
 
@@ -1357,33 +1244,33 @@ void opf_OPFClusteringToKmax(Subgraph *sg)
     while (!Q.IsEmpty())
     {
         p = Q.Remove();
-        sg->ordered_list_of_nodes[i]=p;
+        sg.ordered_list_of_nodes[i]=p;
         i++;
 
-        if ( sg->nodes[p].pred == NIL )
+        if ( sg.nodes[p].pred == NIL )
         {
-            pathval[p] = sg->nodes[p].dens;
-            sg->nodes[p].label=l;
+            pathval[p] = sg.nodes[p].dens;
+            sg.nodes[p].label=l;
             l++;
         }
 
-        sg->nodes[p].pathval = pathval[p];
-        const int nadj = sg->nodes[p].nplatadj + kmax; // total amount of neighbors
+        sg.nodes[p].pathval = pathval[p];
+        const int nadj = sg.nodes[p].nplatadj + kmax; // total amount of neighbors
         
-        auto it_p = sg->nodes[p].adj.begin();
+        auto it_p = sg.nodes[p].adj.begin();
         ki = 1;
-        while(ki <= nadj && it_p != sg->nodes[p].adj.end())
+        while(ki <= nadj && it_p != sg.nodes[p].adj.end())
         {
             q = *it_p;
             if ( Q.GetColor(q) != RealHeap::BLACK )
             {
-                tmp = MIN( pathval[p], sg->nodes[q].dens);
+                tmp = MIN( pathval[p], sg.nodes[q].dens);
                 if ( tmp > pathval[q] )
                 {
                     Q.Update(q,tmp);
-                    sg->nodes[q].pred  = p;
-                    sg->nodes[q].root  = sg->nodes[p].root;
-                    sg->nodes[q].label = sg->nodes[p].label;
+                    sg.nodes[q].pred  = p;
+                    sg.nodes[q].root  = sg.nodes[p].root;
+                    sg.nodes[q].label = sg.nodes[p].label;
                 }
             }
             it_p++;
@@ -1391,38 +1278,38 @@ void opf_OPFClusteringToKmax(Subgraph *sg)
         }
     }
 
-    sg->nlabels = l;
+    sg.nlabels = l;
 }
 
-// PDF computation only for sg->bestk neighbors
-void opf_PDFtoKmax(Subgraph *sg)
+// PDF computation only for sg.bestk neighbors
+void opf_PDFtoKmax(Subgraph& sg)
 {
-    const int kmax = sg->bestk;
+    const int kmax = sg.bestk;
     double  dist;
-    std::vector<float> value(sg->nodes.size());
+    std::vector<float> value(sg.nodes.size());
 
-    sg->K    = (2.0*(float)sg->df/9.0);
+    sg.K    = (2.0*(float)sg.df/9.0);
 
-    sg->mindens = std::numeric_limits<float>::max();
-    sg->maxdens = FLT_MIN;
-    for (size_t i=0; i < sg->nodes.size(); i++)
+    sg.mindens = std::numeric_limits<float>::max();
+    sg.maxdens = FLT_MIN;
+    for (size_t i=0; i < sg.nodes.size(); i++)
     {
         value[i]=0.0;
         int nelems=1;
         
-        auto it = sg->nodes[i].adj.begin();
+        auto it = sg.nodes[i].adj.begin();
         int k = 1;
         //the PDF is computed only for the kmax adjacents
         //because it is assumed that there will be no plateau
         //neighbors yet, i.e. nplatadj = 0 for every node in sg
-        while (k <= kmax && it != sg->nodes[i].adj.end())
+        while (k <= kmax && it != sg.nodes[i].adj.end())
         {
             int neighbor = *it;
         	if(!opf_PrecomputedDistance)
-            	dist  = opf_ArcWeight(sg->nodes[i].feat,sg->nodes[neighbor].feat,sg->nfeats);
+            	dist  = opf_ArcWeight(sg.nodes[i].feat,sg.nodes[neighbor].feat,sg.nfeats);
 			else
-				dist = opf_DistanceValue[sg->nodes[i].position][sg->nodes[neighbor].position];
-            value[i] += exp(-dist/sg->K);
+				dist = opf_DistanceValue[sg.nodes[i].position][sg.nodes[neighbor].position];
+            value[i] += exp(-dist/sg.K);
             it++;
             k++;
             nelems++;
@@ -1430,66 +1317,66 @@ void opf_PDFtoKmax(Subgraph *sg)
 
         value[i] = (value[i]/(float)nelems);
 
-        if (value[i] < sg->mindens)
-            sg->mindens = value[i];
-        if (value[i] > sg->maxdens)
-            sg->maxdens = value[i];
+        if (value[i] < sg.mindens)
+            sg.mindens = value[i];
+        if (value[i] > sg.maxdens)
+            sg.maxdens = value[i];
     }
 
-    if (sg->mindens==sg->maxdens)
+    if (sg.mindens==sg.maxdens)
     {
-        for (size_t i=0; i < sg->nodes.size(); i++)
+        for (size_t i=0; i < sg.nodes.size(); i++)
         {
-            sg->nodes[i].dens = opf_MAXDENS;
-            sg->nodes[i].pathval= opf_MAXDENS-1;
+            sg.nodes[i].dens = opf_MAXDENS;
+            sg.nodes[i].pathval= opf_MAXDENS-1;
         }
     }
     else
     {
-        for (size_t i=0; i < sg->nodes.size(); i++)
+        for (size_t i=0; i < sg.nodes.size(); i++)
         {
-            sg->nodes[i].dens = ((float)(opf_MAXDENS-1)*(value[i]-sg->mindens)/(float)(sg->maxdens-sg->mindens))+1.0;
-            sg->nodes[i].pathval=sg->nodes[i].dens-1;
+            sg.nodes[i].dens = ((float)(opf_MAXDENS-1)*(value[i]-sg.mindens)/(float)(sg.maxdens-sg.mindens))+1.0;
+            sg.nodes[i].pathval=sg.nodes[i].dens-1;
         }
     }
 }
 
 
-// Normalized cut computed only for sg->bestk neighbors
-float opf_NormalizedCutToKmax( Subgraph *sg )
+// Normalized cut computed only for sg.bestk neighbors
+float opf_NormalizedCutToKmax( Subgraph& sg )
 {
     int l, p, q, k;
-    const int kmax = sg->bestk;
+    const int kmax = sg.bestk;
     float ncut, dist;
-    std::vector<float> acumIC(sg->nlabels, 0.0f); //acumulate weights inside each class
-    std::vector<float> acumEC(sg->nlabels, 0.0f); //acumulate weights between the class and a distinct one
+    std::vector<float> acumIC(sg.nlabels, 0.0f); //acumulate weights inside each class
+    std::vector<float> acumEC(sg.nlabels, 0.0f); //acumulate weights between the class and a distinct one
 
     ncut = 0.0;
 
-    for ( p = 0; p < static_cast<int>(sg->nodes.size()); p++ )
+    for ( p = 0; p < static_cast<int>(sg.nodes.size()); p++ )
     {
-        const int nadj = sg->nodes[p].nplatadj + kmax; //for plateaus the number of adjacent
+        const int nadj = sg.nodes[p].nplatadj + kmax; //for plateaus the number of adjacent
                                                       //nodes will be greater than the current
                                                       //kmax, but they should be considered
         
-        auto it = sg->nodes[p].adj.begin();
+        auto it = sg.nodes[p].adj.begin();
         k = 1;
-        while(k <= nadj && it != sg->nodes[p].adj.end())
+        while(k <= nadj && it != sg.nodes[p].adj.end())
 		{
             q = *it;
 			if(!opf_PrecomputedDistance)
-            	dist = opf_ArcWeight(sg->nodes[p].feat,sg->nodes[q].feat,sg->nfeats);
+            	dist = opf_ArcWeight(sg.nodes[p].feat,sg.nodes[q].feat,sg.nfeats);
 			else
-	      		dist = opf_DistanceValue[sg->nodes[p].position][sg->nodes[q].position];
+	      		dist = opf_DistanceValue[sg.nodes[p].position][sg.nodes[q].position];
             if ( dist > 0.0 )
             {
-                if ( sg->nodes[p].label == sg->nodes[q].label )
+                if ( sg.nodes[p].label == sg.nodes[q].label )
                 {
-                    acumIC[ sg->nodes[p].label ] += 1.0 / dist; // intra-class weight
+                    acumIC[ sg.nodes[p].label ] += 1.0 / dist; // intra-class weight
                 }
                 else   // inter - class weight
                 {
-                    acumEC[ sg->nodes[p].label ] += 1.0 / dist; // inter-class weight
+                    acumEC[ sg.nodes[p].label ] += 1.0 / dist; // inter-class weight
                 }
             }
             it++;
@@ -1497,7 +1384,7 @@ float opf_NormalizedCutToKmax( Subgraph *sg )
         }
     }
 
-    for ( l = 0; l < static_cast<int>(sg->nlabels); l++ )
+    for ( l = 0; l < static_cast<int>(sg.nlabels); l++ )
     {
         if ( acumIC[ l ] + acumEC[ l ]  > 0.0 ) ncut += (float) acumEC[ l ] / ( acumIC[ l ] + acumEC[ l ] );
     }

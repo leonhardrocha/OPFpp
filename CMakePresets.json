@@ -22,6 +22,19 @@
                 "CMAKE_BUILD_TYPE": "Debug",
                 "CMAKE_TOOLCHAIN_FILE": "${sourceDir}/build/msvc/conan_toolchain.cmake"
             }
+        },
+        {
+            "name": "LLVM",
+            "displayName": "Clang 21.1.8 x86_64-w64-windows-gnu",
+            "description": "Using compilers: C = C:\\Users\\leonardo_rocha\\AppData\\Local\\Microsoft\\WinGet\\Packages\\MartinStorsjo.LLVM-MinGW.UCRT_Microsoft.Winget.Source_8wekyb3d8bbwe\\llvm-mingw-20251216-ucrt-x86_64\\bin\\clang.exe, CXX = C:\\Users\\leonardo_rocha\\AppData\\Local\\Microsoft\\WinGet\\Packages\\MartinStorsjo.LLVM-MinGW.UCRT_Microsoft.Winget.Source_8wekyb3d8bbwe\\llvm-mingw-20251216-ucrt-x86_64\\bin\\clang++.exe",
+            "generator": "MinGW Makefiles",
+            "binaryDir": "${sourceDir}/out/build/${presetName}",
+            "cacheVariables": {
+                "CMAKE_INSTALL_PREFIX": "${sourceDir}/out/install/${presetName}",
+                "CMAKE_C_COMPILER": "C:/Users/leonardo_rocha/AppData/Local/Microsoft/WinGet/Packages/MartinStorsjo.LLVM-MinGW.UCRT_Microsoft.Winget.Source_8wekyb3d8bbwe/llvm-mingw-20251216-ucrt-x86_64/bin/clang.exe",
+                "CMAKE_CXX_COMPILER": "C:/Users/leonardo_rocha/AppData/Local/Microsoft/WinGet/Packages/MartinStorsjo.LLVM-MinGW.UCRT_Microsoft.Winget.Source_8wekyb3d8bbwe/llvm-mingw-20251216-ucrt-x86_64/bin/clang++.exe",
+                "CMAKE_BUILD_TYPE": "Debug"
+            }
         }
     ],
     "buildPresets": [
@@ -30,6 +43,12 @@
             "description": "",
             "displayName": "",
             "configurePreset": "gcc"
+        },
+        {
+            "name": "LLVM",
+            "description": "",
+            "displayName": "",
+            "configurePreset": "LLVM"
         }
     ]
 }
