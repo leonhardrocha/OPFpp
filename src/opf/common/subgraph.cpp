@@ -129,47 +129,27 @@ Subgraph *ReadSubgraph(char *file){
 }
 
 // Copy subgraph (does not copy Arcs)
-Subgraph *CopySubgraph(Subgraph *g){
-  Subgraph *clone = NULL;
-  int i;
-
-  if(g != NULL){
-    clone = CreateSubgraph(g->nnodes);
-
-    clone->bestk = g->bestk;
-    clone->df = g->df;
-    clone->nlabels = g->nlabels;
-    clone->nfeats = g->nfeats;
-    clone->mindens = g->mindens;
-    clone->maxdens = g->maxdens;
-    clone->K = g->K;
-
-    for(i=0; i< g->nnodes; i++){
-      CopySNode(&clone->node[i], &g->node[i], g->nfeats);
-      clone->ordered_list_of_nodes[i] = g->ordered_list_of_nodes[i];
-    }
-
-    return clone;
-  }else return NULL;
+std::unique_ptr<Subgraph> CopySubgraph(Subgraph& g){
+    Subgraph clone =  Subgraph(g);  
+    return std::make_unique<Subgraph>(clone);
 }
-
 //Copy nodes
-void CopySNode(SNode *dest, SNode *src, int nfeats){
-	dest->feat = AllocFloatArray(nfeats);
-	memcpy(dest->feat, src->feat, nfeats*sizeof(float));
-	dest->pathval = src->pathval;
-	dest->dens = src->dens;
-	dest->label  = src->label;
-	dest->root = src->root;
-	dest->pred  = src->pred;
-	dest->truelabel = src->truelabel;
-	dest->position = src->position;
-	dest->status = src->status;
-	dest->relevant = src->relevant;
-	dest->radius = src->radius;
-	dest->nplatadj = src->nplatadj;
+void CopySNode(SNode& dest, SNode& src, int nfeats){
+	dest.feat = AllocFloatArray(nfeats);
+	memcpy(dest.feat, src.feat, nfeats*sizeof(float));
+	dest.pathval = src.pathval;
+	dest.dens = src.dens;
+	dest.label  = src.label;
+	dest.root = src.root;
+	dest.pred  = src.pred;
+	dest.truelabel = src.truelabel;
+	dest.position = src.position;
+	dest.status = src.status;
+	dest.relevant = src.relevant;
+	dest.radius = src.radius;
+	dest.nplatadj = src.nplatadj;
 
-    dest->adj = src->adj;
+    dest.adj = src.adj;
 }
 
 

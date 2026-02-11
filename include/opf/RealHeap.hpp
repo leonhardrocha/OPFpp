@@ -7,6 +7,7 @@
 class RealHeap {
 public:
     enum class Policy { MIN_VALUE, MAX_VALUE };
+    enum Color { WHITE, GRAY, BLACK };
 
     RealHeap(int n, std::span<float> cost, Policy policy = Policy::MIN_VALUE);
 
@@ -31,5 +32,5 @@ private:
     int m_last;
     Policy m_policy;
 
-    enum Color { WHITE, GRAY, BLACK };
+
 };
