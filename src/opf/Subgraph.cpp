@@ -1,6 +1,6 @@
 #include "opf/Subgraph.hpp"
-#include "opf/RealHeap.hpp"
-#include "opf.hpp"
+#include "opf/PriorityHeap.hpp"
+#include "OPFpp.hpp"
 #include <fstream>
 #include <sstream>
 #include <iostream>
@@ -220,7 +220,7 @@ void Subgraph::MstPrototypes() {
     if (nodes.empty()) return;
 
     std::vector<float> pathval(nodes.size(), std::numeric_limits<float>::max());
-    RealHeap Q(nodes.size(), pathval);
+    PriorityHeap Q(nodes.size(), pathval);
 
     for (auto& node : nodes) {
         node.status = 0;
@@ -258,7 +258,7 @@ void Subgraph::Train() {
     MstPrototypes();
 
     std::vector<float> pathval(nodes.size(), std::numeric_limits<float>::max());
-    RealHeap Q(nodes.size(), pathval);
+    PriorityHeap Q(nodes.size(), pathval);
 
     for (size_t p = 0; p < nodes.size(); ++p) {
         if (nodes[p].status == opf_PROTOTYPE) {
@@ -333,7 +333,7 @@ void Subgraph::RunClusteringStep() {
         pathval[i] = nodes[i].pathval;
     }
 
-    RealHeap Q(nodes.size(), pathval, RealHeap::Policy::MAX_VALUE);
+    PriorityHeap Q(nodes.size(), pathval, PriorityHeap::Policy::MAX_VALUE);
 
     for (size_t p = 0; p < nodes.size(); ++p) {
         nodes[p].pred = NIL;
@@ -354,7 +354,7 @@ void Subgraph::RunClusteringStep() {
         nodes[p].pathval = pathval[p];
 
         for (int q_idx : nodes[p].adj) {
-            if (Q.GetColor(q_idx) != RealHeap::BLACK) { // Check if not removed
+            if (Q.GetColor(q_idx) != PriorityHeap::BLACK) { // Check if not removed
                 float tmp = std::min(pathval[p], nodes[q_idx].dens);
                 if (tmp > pathval[q_idx]) {
                     nodes[q_idx].pred = p;

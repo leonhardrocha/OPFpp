@@ -1,4 +1,4 @@
-#include "OPF.h"
+#include "OPFpp.hpp"
 
 int main(int argc, char **argv){
   int i,n,op;

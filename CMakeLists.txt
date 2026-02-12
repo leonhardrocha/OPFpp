@@ -12,11 +12,30 @@ if(NOT CMAKE_CXX_STANDARD)
     set(CMAKE_CXX_EXTENSIONS OFF)
 endif()
 
+if(MSVC)
+    # Otimizações para Visual Studio
+    add_compile_options($<$<CONFIG:Release>:/Ox /Ot /GT /GL /Oi>)
+else()
+    # Fix climits.h warnings on GCC/Clang (Linux/macOS)
+    add_compile_definitions(__STDC_WANT_IEC_60559_TYPES_EXT__)
+    add_compile_options(-fno-stack-protector) 
+    # Otimizações para GCC e Clang (Linux/macOS)
+    # -O3: Otimização máxima
+    # -march=native: Usa instruções específicas da sua CPU (ex: AVX2)
+    # -flto: Link Time Optimization (otimiza entre arquivos .cpp)
+    
+
+    add_compile_options($<$<CONFIG:Release>:-O3 -march=native -flto -ffast-math)
+    add_link_options($<$<CONFIG:Release>:-flto>)
+endif()
+
+
 ## Python development components Starting with CMake 3.12
 # Use the CMake-provided FindPython module to locate Python and its development components.
 # This is required to build Python extensions and link against the Python library.
 find_package(Python COMPONENTS Interpreter Development REQUIRED)
 link_libraries(pybind11 PRIVATE Python::Python)
+
 
 # Find dependencies provided by Conan.
 # The Conan-generated CMakeDeps files make this possible.
@@ -34,3 +53,4 @@ add_subdirectory(src)
 add_subdirectory(python)
 add_subdirectory(apps)
 add_subdirectory(tests)
+set(CMAKE_EXPORT_COMPILE_COMMANDS ON)

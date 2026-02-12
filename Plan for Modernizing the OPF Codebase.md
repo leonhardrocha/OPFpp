@@ -28,13 +28,13 @@ Address the compiler errors to enable cross-platform development and testing.
 - **Action:** Update the `CMakePresets.json` for GCC to ensure it correctly identifies the Ninja build tool and the `g++` compiler via the Conan toolchain file.
 - **Action:** Ensure that CMake's `find_package` commands for `GTest` and `pybind11` work seamlessly for both MSVC and GCC presets.
 
-### Task 2.3: Modernize Core Data Structures (`RealHeap`, `GQueue`)
+### Task 2.3: Modernize Core Data Structures (`PriorityHeap`, `GQueue`)
 The helper data structures used by the OPF algorithms need to be brought up to modern C++ standards.
 
-- **Action:** Analyze `RealHeap.hpp`/`.cpp` and `GQueue.hpp`/`.cpp`.
-- **Action:** Refactor them from C-style structs with global functions (`CreateRealHeap`, `DestroyRealHeap`) into self-contained C++ classes.
+- **Action:** Analyze `PriorityHeap.hpp`/`.cpp` and `GQueue.hpp`/`.cpp`.
+- **Action:** Refactor them from C-style structs with global functions (`CreatePriorityHeap`, `DestroyPriorityHeap`) into self-contained C++ classes.
 - **Action:** Use `std::vector` for internal data storage instead of manually allocated arrays.
-- **Action:** Implement constructors and destructors to manage resources automatically (RAII). Class methods should replace global functions (e.g., `heap.Insert(item)` instead of `InsertRealHeap(heap, item)`).
+- **Action:** Implement constructors and destructors to manage resources automatically (RAII). Class methods should replace global functions (e.g., `heap.Insert(item)` instead of `InsertPriorityHeap(heap, item)`).
 
 ## 3. Phase 2: Refactor Core Logic to Idiomatic C++
 
@@ -71,7 +71,7 @@ Once the codebase is stable, C++ templates can be introduced to make the algorit
 With a modernized codebase, testing and Python integration become more robust and manageable.
 
 ### Task 5.1: Expand C++ Unit Tests
-- **Action:** Utilize the existing `gtest` framework to write comprehensive unit tests for the newly refactored classes (`Subgraph`, `RealHeap`, `GQueue`).
+- **Action:** Utilize the existing `gtest` framework to write comprehensive unit tests for the newly refactored classes (`Subgraph`, `PriorityHeap`, `GQueue`).
 - **Action:** Add test cases that cover the core OPF algorithms: training, classification, and clustering.
 - **Action:** Ensure tests are run for both MSVC and GCC builds in the CI pipeline.
 

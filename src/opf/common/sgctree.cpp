@@ -23,7 +23,7 @@
   This program is a collection of functions to manage the Optimum-Path Forest (OPF)
   classifier.*/
 
-#include "sgctree.h"
+#include "SgCTree.hpp"
 
 SgCTree *CreateSgMaxTree(Subgraph *g){
     SgCTree *ctree=(SgCTree *)calloc(1,sizeof(SgCTree));
