@@ -200,12 +200,12 @@ namespace opf {
         sg.setNumFeats(nfeats);
 
         for (int i = 0; i < nnodes; ++i) {
-            int truelabel, position;
-            file.read(reinterpret_cast<char*>(&truelabel), sizeof(int));
+            int position, truelabel;
             file.read(reinterpret_cast<char*>(&position), sizeof(int));
+            file.read(reinterpret_cast<char*>(&truelabel), sizeof(int));
             
-            sg.getNode(i).setTruelabel(truelabel);
             sg.getNode(i).setPosition(position);
+            sg.getNode(i).setTruelabel(truelabel);
 
             auto features = std::make_shared<std::vector<T>>(nfeats);
             file.read(reinterpret_cast<char*>(features->data()), nfeats * sizeof(T));
