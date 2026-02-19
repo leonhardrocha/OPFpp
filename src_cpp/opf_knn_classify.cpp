@@ -4,14 +4,14 @@
 #include <fstream>
 
 
-int opf_knn_classify_run(const std::string &test_dataset, int /*k*/) {
+int opf_knn_classify_run(const std::string &test_dataset, const std::string &model_file) {
     try {
         std::cout << "Reading test subgraph..." << std::endl;
         auto sg_test = opf::ReadSubgraph_original<float>(test_dataset.c_str());
         std::cout << "Test subgraph read successfully." << std::endl;
 
         std::cout << "Reading model file..." << std::endl;
-        auto sg_train = opf::Subgraph<float>::readModel((test_dataset + ".model").c_str());
+        auto sg_train = opf::Subgraph<float>::readModel(model_file.c_str());
         std::cout << "Model file read successfully." << std::endl;
         
         opf::OPF<float> opf_classifier;
@@ -43,7 +43,7 @@ int main(int argc, char **argv) {
         return -1;
     }
     try {
-        return opf_knn_classify_run(std::string(argv[1]), 0);
+        return opf_knn_classify_run(std::string(argv[1]), std::string(argv[2]));
     } catch (const std::exception& e) {
         std::cerr << "Error: " << e.what() << std::endl;
         return -1;

@@ -4,7 +4,7 @@
 #include <memory>
 
 
-int opf_semi_run(const std::string &labeled, const std::string &unlabeled, const std::string &eval) {
+int opf_semi_run(const std::string &labeled, const std::string &unlabeled, const std::string &eval, const std::string &model_filename) {
     try {
         std::cout << "Reading labeled subgraph..." << std::endl;
         auto sg_labeled = opf::ReadSubgraph_original<float>(labeled.c_str());
@@ -28,7 +28,9 @@ int opf_semi_run(const std::string &labeled, const std::string &unlabeled, const
         std::cout << "Semi-supervised learning completed." << std::endl;
         
         std::cout << "Writing model file..." << std::endl;
-        final_sg.writeModel("classifier.opf");
+        final_sg.writeModel(model_filename.c_str());
+        std::cout << "Model file written to " << model_filename << std::endl;
+        
         std::cout << "Model file written." << std::endl;
         return 0;
 
@@ -41,14 +43,14 @@ int opf_semi_run(const std::string &labeled, const std::string &unlabeled, const
 #ifndef OPF_UNIT_TEST
 int main(int argc, char **argv) {
     if (argc < 3 || argc > 4) {
-        std::cerr << "Usage: opf_semi <labeled_dataset> <unlabeled_dataset> [evaluation_dataset]" << std::endl;
+        std::cerr << "Usage: opf_semi <labeled_dataset> <unlabeled_dataset> [evaluation_dataset] [model_filename]" << std::endl;
         return -1;
     }
     try {
-        if (argc == 4) {
-            return opf_semi_run(std::string(argv[1]), std::string(argv[2]), std::string(argv[3]));
+        if (argc == 5) {
+            return opf_semi_run(std::string(argv[1]), std::string(argv[2]), std::string(argv[3]), std::string(argv[4]));
         } else {
-            return opf_semi_run(std::string(argv[1]), std::string(argv[2]), "");
+            return opf_semi_run(std::string(argv[1]), std::string(argv[2]), "", "classifier.opf");
         }
     } catch (const std::exception& e) {
         std::cerr << "Error: " << e.what() << std::endl;

@@ -19,14 +19,15 @@ int opf_classify_run(const std::string &test_dataset, const std::string &model_f
         std::cout << "Classifying..." << std::endl;
         opf_classifier.classifying(sg_train, sg_test);
         std::cout << "Classification completed." << std::endl;
-
-        std::cout << "Writing output file..." << std::endl;
-        std::ofstream outfile("classifications.out");
+        
+        std::string out_filename = test_dataset + ".out";
+        std::cout << "Writing output file " << out_filename << " ..." << std::endl;
+        std::ofstream outfile(out_filename);
         for (int i = 0; i < sg_test.getNumNodes(); ++i) {
             outfile << sg_test.getNode(i).getLabel() << std::endl;
         }
         outfile.close();
-        std::cout << "Output file written to classifications.out" << std::endl;
+        std::cout << "Output file written to " << out_filename << std::endl;
         return 0;
 
     } catch (const std::exception& e) {

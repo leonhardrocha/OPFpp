@@ -15,36 +15,27 @@ namespace opf {
             throw std::invalid_argument("Percentage must be between 0.0 and 1.0");
         }
 
+        // Count nodes per label
         std::map<int, int> label_count;
-        std::map<int, int> sg1_label_count;
-        
         for (int i = 0; i < original.getNumNodes(); ++i) {
-            label_count[original.getNode(i).getTruelabel()]++;
+            auto node = original.getNode(i);
+            node.setStatus(0); // Reset status for all nodes
+            label_count[node.getTruelabel()]++;
         }
 
-        for(auto const& [label, count] : label_count) {
-            sg1_label_count[label] = std::max(1, static_cast<int>(percentage_sg1 * count));
+        // Calculate how many nodes from each label should go to sg1
+        std::map<int, int> nelems;
+        for (auto const& [label, count] : label_count) {
+            nelems[label] = std::max(1, static_cast<int>(percentage_sg1 * count));
         }
 
-        std::vector<int> indices(original.getNumNodes());
-        std::iota(indices.begin(), indices.end(), 0);
-        
-        std::random_device rd;
-        std::mt19937 g(rd());
-        std::shuffle(indices.begin(), indices.end(), g);
-
-        std::vector<bool> assigned_to_sg1(original.getNumNodes(), false);
+        // Calculate total nodes for sg1
         int sg1_total_nodes = 0;
-
-        for (int index : indices) {
-            int label = original.getNode(index).getTruelabel();
-            if (sg1_label_count[label] > 0) {
-                assigned_to_sg1[index] = true;
-                sg1_label_count[label]--;
-                sg1_total_nodes++;
-            }
+        for (auto const& [label, count] : nelems) {
+            sg1_total_nodes += count;
         }
-        
+
+        // Create subgraphs with correct sizes
         sg1 = Subgraph<T>(sg1_total_nodes);
         sg2 = Subgraph<T>(original.getNumNodes() - sg1_total_nodes);
         sg1.setNumFeats(original.getNumFeats());
@@ -52,12 +43,34 @@ namespace opf {
         sg1.setNumLabels(original.getNumLabels());
         sg2.setNumLabels(original.getNumLabels());
 
+        // Track which nodes have been assigned
+        std::vector<int> statuses(original.getNumNodes(), 0);
+        
+        // Randomly assign nodes to sg1 respecting per-label quotas
+        std::random_device rd;
+        std::mt19937 gen(rd());
+        std::uniform_int_distribution<> dis(0, original.getNumNodes() - 1);
+        
         int sg1_idx = 0;
+        int remaining = sg1_total_nodes;
+        
+        while (remaining > 0) {
+            int i = dis(gen);
+            if (statuses[i] == 0) {  // Not yet assigned
+                int label = original.getNode(i).getTruelabel();
+                if (nelems[label] > 0) {
+                    sg1.getNode(sg1_idx++) = original.getNode(i);
+                    nelems[label]--;
+                    statuses[i] = 1;  // Mark as assigned to sg1
+                    remaining--;
+                }
+            }
+        }
+
+        // Assign remaining nodes to sg2
         int sg2_idx = 0;
-        for(int i = 0; i < original.getNumNodes(); ++i) {
-            if(assigned_to_sg1[i]) {
-                sg1.getNode(sg1_idx++) = original.getNode(i);
-            } else {
+        for (int i = 0; i < original.getNumNodes(); ++i) {
+            if (statuses[i] == 0) {  // Not assigned to sg1
                 sg2.getNode(sg2_idx++) = original.getNode(i);
             }
         }

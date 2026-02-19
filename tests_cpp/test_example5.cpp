@@ -29,9 +29,9 @@ int main() {
     for (int i = 0; i < 5; ++i) {
         if (opf_split_run(std::string(data_files[i]), 0.8f, 0.0f, 0.2f) != 0) return 1;
         char argsbuf[128];
-        sprintf(argsbuf, "training.dat %d %d %f", ks[i], p2s[i], p3s[i]);
-        if (opf_cluster_run("training.dat") != 0) return 1;
-        if (opf_knn_classify_run("testing.dat", ks[i]) != 0) return 1;
+        sprintf(argsbuf, "training.dat %d %d %f", ks[i], p2s[i], p3s[i]);        
+        if (opf_cluster_run("training.dat") != 0) return 1;        
+        if (opf_knn_classify_run("testing.dat", "training.dat.model") != 0) return 1;
         if (opf_accuracy_run("testing.dat") != 0) return 1;
     }
 

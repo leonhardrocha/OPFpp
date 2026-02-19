@@ -12,11 +12,33 @@ bool file_exists(const char* filename) {
     return infile.good();
 }
 
-// Helper function to copy a file
-void copy_file(const char* src, const char* dest) {
+// Helper function to copy a file with error checking
+bool copy_file(const char* src, const char* dest) {
     std::ifstream source(src, std::ios::binary);
+    if (!source.is_open()) {
+        std::cerr << "Error: Could not open source file: " << src << std::endl;
+        return false;
+    }
+    
     std::ofstream destination(dest, std::ios::binary);
+    if (!destination.is_open()) {
+        std::cerr << "Error: Could not open destination file: " << dest << std::endl;
+        source.close();
+        return false;
+    }
+    
     destination << source.rdbuf();
+    
+    if (!destination.good()) {
+        std::cerr << "Error: Failed to write to destination file: " << dest << std::endl;
+        source.close();
+        destination.close();
+        return false;
+    }
+    
+    source.close();
+    destination.close();
+    return true;
 }
 
 int main() {
@@ -35,18 +57,18 @@ int main() {
     const char* data_file = "../data/saturn.dat";
 
     if (opf_split_run("../data/saturn.dat", 0.6f, 0.2f, 0.2f) != 0) return 1;
-    copy_file("training.dat", "Z1.dat");
-    copy_file("testing.dat", "Z3.dat");
+    if (!copy_file("training.dat", "Z1.dat")) return 1;
+    if (!copy_file("testing.dat", "Z3.dat")) return 1;
     remove("training.dat");
     remove("testing.dat");
     if (opf_split_run("Z1.dat", 0.4f, 0.0f, 0.6f) != 0) return 1;
-    copy_file("training.dat", "Z1LINE.dat");
-    copy_file("testing.dat", "Z1DOUBLELINE.dat");
+    if (!copy_file("training.dat", "Z1LINE.dat")) return 1;
+    if (!copy_file("testing.dat", "Z1DOUBLELINE.dat")) return 1;
     remove("training.dat");
     remove("testing.dat");
 
     // First part
-    if (opf_semi_run("Z1LINE.dat", "Z1DOUBLELINE.dat", "") != 0) return 1;
+    if (opf_semi_run("Z1LINE.dat", "Z1DOUBLELINE.dat", "", "classifier.opf") != 0) return 1;
     if (opf_classify_run("Z3.dat", "classifier.opf") != 0) return 1;
     if (opf_accuracy_run("Z3.dat") != 0) return 1;
 
@@ -60,7 +82,7 @@ int main() {
     remove("Z3.dat.out");
 
     // Second part
-    if (opf_semi_run("Z1LINE.dat", "Z1DOUBLELINE.dat", "evaluating.dat") != 0) return 1;
+    if (opf_semi_run("Z1.dat", "Z1DOUBLELINE.dat", "evaluating.dat", "classifier.opf") != 0) return 1;
     if (opf_classify_run("Z3.dat", "classifier.opf") != 0) return 1;
     if (opf_accuracy_run("Z3.dat") != 0) return 1;
 

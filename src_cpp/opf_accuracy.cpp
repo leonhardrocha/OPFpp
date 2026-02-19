@@ -21,6 +21,7 @@ int opf_accuracy_run(const std::string &dataset) {
             outfile >> label;
             subgraph.getNode(i).setLabel(label);
         }
+        outfile.close();
 
         opf::OPF<float> opf_classifier;
         float acc = opf_classifier.accuracy(subgraph);
@@ -30,6 +31,7 @@ int opf_accuracy_run(const std::string &dataset) {
         std::string acc_filename = dataset + ".acc";
         std::ofstream accfile(acc_filename, std::ios_base::app);
         accfile << acc * 100 << std::endl;
+        accfile.close();
         return 0;
 
     } catch (const std::exception& e) {

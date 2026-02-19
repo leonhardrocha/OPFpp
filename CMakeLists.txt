@@ -4,15 +4,34 @@ project(LibOPF_CPP CXX)
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
+# Add GoogleTest
+include(FetchContent)
+FetchContent_Declare(
+    googletest
+    GIT_REPOSITORY https://github.com/google/googletest.git
+    GIT_TAG        v1.17.0  # Use the latest stable release
+)
+FetchContent_MakeAvailable(googletest)
+
 # Define the OPF C++ library
-# Core library (implementation used by executables and tests)
-# Note: OPF.hpp is header-only with inline implementations; don't compile OPF.cpp
 add_library(opf_core
     src_cpp/file.cpp
     src_cpp/Distance.cpp
+    src_cpp/opf_split.cpp
+    src_cpp/opf_train.cpp
+    src_cpp/opf_classify.cpp
+    src_cpp/opf_accuracy.cpp
+    src_cpp/opf_distance.cpp
+    src_cpp/opf_learn.cpp
+    src_cpp/opf_cluster.cpp
+    src_cpp/opf_knn_classify.cpp
+    src_cpp/opf_semi.cpp
 )
 
 target_include_directories(opf_core PUBLIC include_cpp)
+
+# Guard main() definitions in wrapper sources when building the library
+target_compile_definitions(opf_core PRIVATE OPF_UNIT_TEST)
 
 # Define executables
 add_executable(opf_train_cpp src_cpp/opf_train.cpp)
@@ -30,9 +49,7 @@ add_executable(opf_learn_cpp src_cpp/opf_learn.cpp)
 add_executable(opf_pruning_cpp src_cpp/opf_pruning.cpp)
 add_executable(opf_semi_cpp src_cpp/opf_semi.cpp)
 
-
 # Link executables against the OPF C++ library
-# Each executable includes its own src_cpp/opf_*.cpp with main() defined (not guarded)
 target_link_libraries(opf_train_cpp opf_core)
 target_link_libraries(opf_classify_cpp opf_core)
 target_link_libraries(opf_accuracy_cpp opf_core)
@@ -48,10 +65,11 @@ target_link_libraries(opf_learn_cpp opf_core)
 target_link_libraries(opf_pruning_cpp opf_core)
 target_link_libraries(opf_semi_cpp opf_core)
 
-# Test API wrappers are implemented in the src_cpp files; no separate test library needed.
-
 # Testing
 enable_testing()
+
+# Include GoogleTest
+include(GoogleTest)
 
 # Configure test helper header with the build directory so tests can call
 # executables by absolute path (works across platforms and when CTest runs).
@@ -60,72 +78,29 @@ configure_file(${CMAKE_SOURCE_DIR}/tests_cpp/opf_test_config.h.in
 include_directories(${CMAKE_BINARY_DIR})
 include_directories(${CMAKE_SOURCE_DIR}/tests_cpp)
 
+# Define GoogleTest-based tests
 add_executable(test_example1 tests_cpp/test_example1.cpp)
-target_sources(test_example1 PRIVATE
-    src_cpp/opf_split.cpp
-    src_cpp/opf_train.cpp
-    src_cpp/opf_classify.cpp
-    src_cpp/opf_accuracy.cpp
-)
-target_compile_definitions(test_example1 PRIVATE OPF_UNIT_TEST)
-target_link_libraries(test_example1 opf_core)
+target_link_libraries(test_example1 opf_core gtest gtest_main)
 add_test(NAME test_example1 COMMAND $<TARGET_FILE:test_example1>)
 
 add_executable(test_example2 tests_cpp/test_example2.cpp)
-target_sources(test_example2 PRIVATE
-    src_cpp/opf_split.cpp
-    src_cpp/opf_learn.cpp
-    src_cpp/opf_classify.cpp
-    src_cpp/opf_accuracy.cpp
-)
-target_compile_definitions(test_example2 PRIVATE OPF_UNIT_TEST)
-target_link_libraries(test_example2 opf_core)
+target_link_libraries(test_example2 opf_core gtest gtest_main)
 add_test(NAME test_example2 COMMAND $<TARGET_FILE:test_example2>)
 
 add_executable(test_example3 tests_cpp/test_example3.cpp)
-target_sources(test_example3 PRIVATE
-    src_cpp/opf_distance.cpp
-    src_cpp/opf_split.cpp
-    src_cpp/opf_train.cpp
-    src_cpp/opf_classify.cpp
-    src_cpp/opf_accuracy.cpp
-)
-target_compile_definitions(test_example3 PRIVATE OPF_UNIT_TEST)
-target_link_libraries(test_example3 opf_core)
+target_link_libraries(test_example3 opf_core gtest gtest_main)
 add_test(NAME test_example3 COMMAND $<TARGET_FILE:test_example3>)
 
 add_executable(test_example4 tests_cpp/test_example4.cpp)
-target_sources(test_example4 PRIVATE
-    src_cpp/opf_distance.cpp
-    src_cpp/opf_split.cpp
-    src_cpp/opf_learn.cpp
-    src_cpp/opf_classify.cpp
-    src_cpp/opf_accuracy.cpp
-)
-target_compile_definitions(test_example4 PRIVATE OPF_UNIT_TEST)
-target_link_libraries(test_example4 opf_core)
+target_link_libraries(test_example4 opf_core gtest gtest_main)
 add_test(NAME test_example4 COMMAND $<TARGET_FILE:test_example4>)
 
 add_executable(test_example5 tests_cpp/test_example5.cpp)
-target_sources(test_example5 PRIVATE
-    src_cpp/opf_split.cpp
-    src_cpp/opf_cluster.cpp
-    src_cpp/opf_knn_classify.cpp
-    src_cpp/opf_accuracy.cpp
-)
-target_compile_definitions(test_example5 PRIVATE OPF_UNIT_TEST)
-target_link_libraries(test_example5 opf_core)
+target_link_libraries(test_example5 opf_core gtest gtest_main)
 add_test(NAME test_example5 COMMAND $<TARGET_FILE:test_example5>)
 
 add_executable(test_example6 tests_cpp/test_example6.cpp)
-target_sources(test_example6 PRIVATE
-    src_cpp/opf_split.cpp
-    src_cpp/opf_semi.cpp
-    src_cpp/opf_classify.cpp
-    src_cpp/opf_accuracy.cpp
-)
-target_compile_definitions(test_example6 PRIVATE OPF_UNIT_TEST)
-target_link_libraries(test_example6 opf_core)
+target_link_libraries(test_example6 opf_core gtest gtest_main)
 add_test(NAME test_example6 COMMAND $<TARGET_FILE:test_example6>)
 
 set_tests_properties(

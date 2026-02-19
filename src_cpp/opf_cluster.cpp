@@ -47,9 +47,9 @@ int opf_cluster_run(const std::string &dataset) {
                 subgraph.getNode(i).setTruelabel(subgraph.getNode(i).getLabel() + 1);
             }
         }
-
-        std::cout << "Writing model file..." << std::endl;
-        subgraph.writeModel("classifier.opf");
+        std::string model_filename = dataset + ".model";
+        std::cout << "Writing model file to " << model_filename << "..." << std::endl;
+        subgraph.writeModel(model_filename.c_str());
         std::cout << "Model file written." << std::endl;
 
         std::string out_filename = dataset + ".out";

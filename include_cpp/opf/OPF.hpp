@@ -188,13 +188,56 @@ namespace opf {
         }
 
         float accuracy(Subgraph<T>& sg) {
-            int correct = 0;
-            for (int i = 0; i < sg.getNumNodes(); ++i) {
-                if (sg.getNode(i).getLabel() == sg.getNode(i).getTruelabel()) {
-                    correct++;
+            // Compute accuracy using error matrix (matching C implementation)
+            int nlabels = sg.getNumLabels();
+            int nnodes = sg.getNumNodes();
+            
+            // Create error matrix: error_matrix[label][0] = fp rate, [1] = fn rate
+            std::vector<std::vector<float>> error_matrix(nlabels + 1, std::vector<float>(2, 0.0f));
+            
+            // Count samples per true label
+            std::vector<int> nclass(nlabels + 1, 0);
+            for (int i = 0; i < nnodes; ++i) {
+                int true_label = sg.getNode(i).getTruelabel();
+                if (true_label >= 0 && true_label <= nlabels) {
+                    nclass[true_label]++;
                 }
             }
-            return (float)correct / sg.getNumNodes();
+            
+            // Count errors
+            for (int i = 0; i < nnodes; ++i) {
+                int true_label = sg.getNode(i).getTruelabel();
+                int pred_label = sg.getNode(i).getLabel();
+                
+                if (true_label != pred_label) {
+                    if (true_label >= 0 && true_label <= nlabels) {
+                        error_matrix[true_label][1]++;  // false negative
+                    }
+                    if (pred_label >= 0 && pred_label <= nlabels) {
+                        error_matrix[pred_label][0]++;  // false positive
+                    }
+                }
+            }
+            
+            // Normalize errors by class size
+            int nlabels_with_samples = 0;
+            for (int i = 1; i <= nlabels; ++i) {
+                if (nclass[i] != 0) {
+                    error_matrix[i][1] /= (float)nclass[i];  // normalize FN by true positives
+                    error_matrix[i][0] /= (float)(nnodes - nclass[i]);  // normalize FP by negatives
+                    nlabels_with_samples++;
+                }
+            }
+            
+            // Compute overall accuracy
+            float error = 0.0f;
+            for (int i = 1; i <= nlabels; ++i) {
+                if (nclass[i] != 0) {
+                    error += (error_matrix[i][0] + error_matrix[i][1]);
+                }
+            }
+            
+            return (nlabels_with_samples > 0) ? (1.0f - (error / (2.0f * nlabels_with_samples))) : 0.0f;
         }
 
         void normalize(Subgraph<T>& sg) {

@@ -17,7 +17,7 @@ namespace opf {
         Subgraph() = default;
 
         // Constructor with size
-        Subgraph(int n_nodes) : nodes(n_nodes) {}
+        Subgraph(int n_nodes) : nodes(n_nodes), ordered_list_of_nodes(n_nodes) {}
 
         // Getters
         int getNumNodes() const { return nodes.size(); }
@@ -88,7 +88,7 @@ namespace opf {
                 file.write(reinterpret_cast<const char*>(node.getFeat()->data()), nfeats * sizeof(T));
             }
 
-            file.write(reinterpret_cast<const char*>(ordered_list_of_nodes.data()), nnodes * sizeof(int));
+            file.write(reinterpret_cast<const char*>(ordered_list_of_nodes.data()), ordered_list_of_nodes.size() * sizeof(int));
         }
 
         static Subgraph<T> readModel(const std::string& filename) {
