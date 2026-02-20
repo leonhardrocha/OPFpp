@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 # Build artifacts
 build/
 *.exe
@@ -11,3 +12,85 @@ CMakeCache.txt
 CMakeFiles/
 cmake_install.cmake
 Makefile
+=======
+﻿# CMake
+CMakeCache.txt
+CMakeFiles/
+CMakeScripts/
+cmake_install.cmake
+CTestTestfile.cmake
+Makefile
+Testing/
+build/
+cmake-build-*/
+_build/
+install/
+bin/
+lib/
+*.dir
+
+# Build artifacts
+*.o
+*.obj
+*.lo
+*.la
+*.al
+*.a
+*.lib
+*.dll
+*.exe
+*.pdb
+*.ilk
+*.idb
+*.so
+*.dylib
+
+# Ninja
+build.ninja
+.ninja_log
+.ninja_deps
+
+# MSYS / MinGW
+msys64/
+mingw64/
+mingw32/
+
+# Conan (including Conan 2 cache/layouts)
+.conan/
+.conan2/
+conaninfo.txt
+conanbuildinfo*
+conan.lock
+conanfile.py
+conanfile.txt
+conan_data/
+conan_cache/
+
+# IDEs and editors
+.vscode/
+.vs/
+.idea/
+*.iml
+*.suo
+*.user
+*.vcxproj.user
+*.VC.db
+*.VC.VC.opendb
+
+# CLion
+.idea/
+cmake-build-*/
+
+# Test/coverage
+CTestTestfile.cmake
+coverage.*
+*.lcov
+.coverage
+
+# Misc
+*.log
+*.tmp
+*.swp
+.DS_Store
+Thumbs.db
+>>>>>>> f6757cce94cf63d30d1ae1407e2596e9cd29a24a
