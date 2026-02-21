@@ -201,30 +201,18 @@ for (auto id : results) {
 1. ✅ **SplitSystem** — creates Subgraph entities from Dataset
 2. ✅ **IOSystem** — serializes/deserializes entities to text files
 
-**Phase 2: Refactor existing OPF operations (medium effort, medium impact)** — IN PROGRESS
-3. 🔄 **Phase 2.1: TrainSystem** — wrap `opf_train` logic (IMPLEMENTATION COMPLETE, TESTS INCOMPLETE)
-   - ✅ Created `CModelParams` component: stores prototypes, path values, predecessors, ordered nodes, labels
-   - ✅ Created `CEvalMetrics` component: tracks training statistics, accuracy, num_prototypes
-   - ✅ Implemented `TrainSystem` header with simplified IFT (Image Foresting Transform) algorithm
-   - ⚠️ Created 18 test cases BUT tests do NOT verify internal `train_entity()` dispatcher logic
-     - Tests verify end results through public `update()` API (component creation, label propagation, metrics recording)
-     - **Tests don't verify dispatcher**: Cannot directly test private `train_entity()` method
-     - **Cannot independently test routing logic**: Would need to refactor method accessibility or use friend classes/functions
-     - **Tests only verify final output**: Single-sample vs multi-sample behavior is indirectly validated through results
-     - **Assessment**: Tests are useful for integration/end-to-end validation BUT not for unit-testing dispatcher mechanism
-   - ✅ **All 18 tests passing** (0.28s execution time)
-   - 🟡 **Tests are adequate for functionality** but cannot directly validate dispatcher routing
-4. 🔴 **Phase 2.2: ClassifySystem** — wrap `opf_classify` logic (IMPLEMENTATION INCOMPLETE)
-   - ✅ Created `ClassifySystem.hpp` implementing OPF classification algorithm structure
-   - ✅ Implements cost-based routing: `cost = max(pathval, distance)`
-   - ✅ Early termination optimization when `min_cost <= next pathval`
-   - ✅ Created 16 comprehensive test cases
-   - 🔴 **CRITICAL ISSUE**: Distance computation not implemented
-     - `model->prototypes` stores indices, not feature vectors
-     - Cannot compute distance without access to original training features
-     - Current implementation uses `weight = 0.0f` (placeholder)
-   - **9 tests passing, 7 failing** due to missing distance computation
-   - **Next step**: Need to store prototype feature vectors in `CModelParams` OR maintain reference to training data
+**Phase 2: Refactor existing OPF operations (medium effort, medium impact)** — ✅ PHASE 2 COMPLETE
+3. ✅ **Phase 2.1: TrainSystem** — wrap `opf_train` logic (IMPLEMENTATION + TESTS COMPLETE)
+    - ✅ Implemented MST prototype selection (Prim’s algorithm) and full IFT propagation
+    - ✅ Stores training features in `CModelParams` (`all_features`, `prototype_features`)
+    - ✅ Supports subgraph training via `CSamples` without requiring subgraph `CFeatures`/`CLabel`
+    - ✅ Updated tests to validate MST/IFT workflow and ordering
+    - ✅ **All 18 tests passing** (out/build/clang)
+4. ✅ **Phase 2.2: ClassifySystem** — wrap `opf_classify` logic (IMPLEMENTATION + TESTS COMPLETE)
+    - ✅ Uses stored training features for Euclidean distance computation
+    - ✅ Cost-based routing: `cost = max(pathval, distance)` + early termination
+    - ✅ Updated tests to validate distance, ordering, and OPF cost function
+    - ✅ **All 22 tests passing** (out/build/clang)
 5. **Phase 2.3: AccuracySystem** — compute metrics
    - Input: Predicted labels + `CLabel` components
    - Output: `CEvalMetrics` with accuracy values

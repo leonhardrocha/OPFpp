@@ -7,39 +7,24 @@
 #include <numeric>
 #include <limits>
 #include <chrono>
+#include <queue>
 #include "System.h"
 #include "EntityRegistry.h"
 #include "Components.hpp"
+#include "ClassifySystem.hpp"
 
 namespace ecs {
 
-// Simple distance function (Euclidean) used in training
-inline float euclidean_distance(const float* f1, const float* f2, int n) {
-    if (f1 == nullptr || f2 == nullptr) return std::numeric_limits<float>::max();
-    float dist = 0.0f;
-    for (int i = 0; i < n; ++i) {
-        float diff = f1[i] - f2[i];
-        dist += diff * diff;
-    }
-    return std::sqrt(dist);
-}
-
 /**
- * TrainSystem: Implements OPF training for entities with CFeatures and CLabel.
+ * TrainSystem: Implements full OPF training with MST prototype selection and IFT.
  * 
- * Input Requirements:
- *   - Entity must have CFeatures (feature vectors)
- *   - Entity must have CLabel (training labels)
- *   - Entity should have CSamples (optional, for sample subset tracking)
+ * Workflow (based on test_example3.cpp analysis):
+ *   1. MST Prototype Selection: Prim's algorithm to find class boundary samples
+ *   2. IFT: Image Foresting Transform with max(pathval, weight) cost function
+ *   3. Ordering: Nodes sorted by pathval for efficient classification
  * 
- * Output:
- *   - Adds CModelParams: trained model with prototypes, path values, predecessors
- *   - Adds CEvalMetrics: training statistics (num prototypes, etc.)
- * 
- * Algorithm:
- *   1. Prototype Selection: Simple heuristic (select one representative per label)
- *   2. IFT (Image Foresting Transform): Propagate labels via minimum cost paths
- *   3. Result: Each node assigned a label via its nearest prototype
+ * Input: Entities with CFeatures (multi-sample via CSamples) and CLabel
+ * Output: CModelParams (prototypes, pathvals, predecessors, ordered_nodes) + CEvalMetrics
  */
 class TrainSystem : public ISystem {
 public:
@@ -47,152 +32,191 @@ public:
     virtual ~TrainSystem() = default;
 
     void update(EntityRegistry& registry, double dt) override {
-        auto start_time = std::chrono::high_resolution_clock::now();
-
-        // Find all training entities (those with CFeatures and CLabel)
-        auto training_entities = registry.view<CFeatures, CLabel>();
-
-        for (auto entity_id : training_entities) {
+        // First, process all subgraph entities with CSamples
+        auto subgraph_entities = registry.view<CSamples>();
+        for (auto entity_id : subgraph_entities) {
             train_entity(registry, entity_id);
         }
 
-        auto end_time = std::chrono::high_resolution_clock::now();
-        auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(end_time - start_time);
+        // Then, process single-sample entities (features + label) that are not subgraphs
+        auto training_entities = registry.view<CFeatures, CLabel>();
+        for (auto entity_id : training_entities) {
+            if (registry.hasComponent<CSamples>(entity_id)) continue;
+            train_entity(registry, entity_id);
+        }
     }
 
 private:
-    /**
-     * Train a single entity (Subgraph) using OPF training algorithm.
-     */
     void train_entity(EntityRegistry& registry, EntityId entity_id) {
-        auto* features = registry.getComponent<CFeatures>(entity_id);
-        auto* label = registry.getComponent<CLabel>(entity_id);
-
-        if (!features || !label) return;
-
-        // Determine number of samples and features
-        // For a single-entity training, we assume:
-        // - features->values contains all sample features concatenated
-        // - We need metadata about how many samples and features per sample
-        // For now, we'll work with feature vectors from a sample list
-
         auto* samples = registry.getComponent<CSamples>(entity_id);
-        if (!samples) {
-            // Single sample case
-            train_single_sample(registry, entity_id, features, label);
+        if (samples) {
+            train_subgraph_mst_ift(registry, entity_id, samples);
             return;
         }
 
-        // Multi-sample training case
-        train_subgraph(registry, entity_id, samples, features, label);
+        auto* features = registry.getComponent<CFeatures>(entity_id);
+        auto* label = registry.getComponent<CLabel>(entity_id);
+        if (!features || !label) return;
+
+        train_single_sample(registry, entity_id, features, label);
     }
 
-    /**
-     * Train a single sample entity (creates trivial model).
-     */
     void train_single_sample(EntityRegistry& registry, EntityId entity_id,
                              CFeatures* features, CLabel* label) {
-        // Create model with single prototype
-        auto model = std::make_unique<CModelParams>(1, 1);
+        auto model = std::make_unique<CModelParams>(features->values.size(), 1);
         model->prototypes = {0};
         model->node_labels = {label->label};
         model->pathvalues = {0.0f};
         model->predecessors = {-1};
         model->ordered_nodes = {0};
+        model->prototype_features = {features->values};
+        model->all_features = {features->values};
 
         registry.addComponent<CModelParams>(entity_id, std::move(*model));
 
         auto metrics = std::make_unique<CEvalMetrics>();
         metrics->num_prototypes = 1;
         metrics->num_samples_trained = 1;
-        metrics->accuracy = 1.0f;  // Single sample is always correct
+        metrics->accuracy = 1.0f;
         metrics->status = "trained";
         registry.addComponent<CEvalMetrics>(entity_id, std::move(*metrics));
     }
 
     /**
-     * Train a subgraph with multiple samples.
+     * Full OPF Training: MST Prototype Selection + IFT
      * 
-     * This is a simplified version of opf_OPFTraining:
-     * 1. Select prototypes (one per label)
-     * 2. Run IFT to propagate labels
-     * 3. Store model parameters
+     * Implements algorithms documented in ecs.md Section 14
      */
-    void train_subgraph(EntityRegistry& registry, EntityId entity_id,
-                        CSamples* samples, CFeatures* features, CLabel* primary_label) {
+    void train_subgraph_mst_ift(EntityRegistry& registry, EntityId entity_id,
+                                CSamples* samples) {
+        // Extract sample features from registry
+        std::vector<std::vector<float>> sample_features;
+        std::vector<int> sample_labels;
         
-        int num_samples = samples->indices.size();
+        for (int sample_id : samples->indices) {
+            auto* feat = registry.getComponent<CFeatures>(sample_id);
+            auto* lbl = registry.getComponent<CLabel>(sample_id);
+            if (feat && lbl) {
+                sample_features.push_back(feat->values);
+                sample_labels.push_back(lbl->label);
+            }
+        }
+
+        int num_samples = sample_features.size();
         if (num_samples == 0) return;
 
-        // For simplicity in this prototype phase, we'll store feature dimension
-        // In a real implementation, we'd have a separate component storing sample metadata
-        int nfeats = 1;  // Default; could come from component metadata
-
+        int nfeats = sample_features[0].size();
         auto model = std::make_unique<CModelParams>(nfeats, num_samples);
-        
-        // ====== Step 1: Prototype Selection ======
-        // Simplified: select first sample as prototype for its label
-        // In full OPF, this would use MST (Minimum Spanning Tree)
+        model->all_features = sample_features;  // Store for classification
+
+        // ====== Phase A: MST Prototype Selection (Prim's Algorithm) ======
+        std::vector<float> mst_pathval(num_samples, std::numeric_limits<float>::infinity());
+        std::vector<int> mst_pred(num_samples, -1);
+        std::vector<bool> visited(num_samples, false);
+        std::vector<int> status(num_samples, 0);  // 0=normal, 1=prototype
+
+        // Min-heap for Prim's: (distance, node_id)
+        using PQElement = std::pair<float, int>;
+        std::priority_queue<PQElement, std::vector<PQElement>, std::greater<PQElement>> pq;
+
+        // Start MST from node 0
+        mst_pathval[0] = 0.0f;
+        pq.push({0.0f, 0});
+
+        while (!pq.empty()) {
+            auto [cost, p] = pq.top();
+            pq.pop();
+
+            if (visited[p]) continue;
+            visited[p] = true;
+
+            // Detect prototype: class boundary edge
+            if (mst_pred[p] != -1 && sample_labels[p] != sample_labels[mst_pred[p]]) {
+                status[p] = 1;
+                status[mst_pred[p]] = 1;
+            }
+
+            // Expand to all unvisited neighbors
+            for (int q = 0; q < num_samples; ++q) {
+                if (visited[q]) continue;
+
+                float weight = euclidean_distance(sample_features[p], sample_features[q]);
+                if (weight < mst_pathval[q]) {
+                    mst_pathval[q] = weight;
+                    mst_pred[q] = p;
+                    pq.push({weight, q});
+                }
+            }
+        }
+
+        // Collect prototypes
         std::vector<int> prototypes;
-        std::vector<int> prototype_labels;
-        
-        prototypes.push_back(0);
-        prototype_labels.push_back(primary_label->label);
-        
+        for (int i = 0; i < num_samples; ++i) {
+            if (status[i] == 1) {
+                prototypes.push_back(i);
+            }
+        }
+        // Ensure at least one prototype
+        if (prototypes.empty()) {
+            prototypes.push_back(0);
+            status[0] = 1;
+        }
+
         model->prototypes = prototypes;
 
-        // ====== Step 2: IFT (Image Foresting Transform) ======
-        // Simplified IFT: assign each sample its prototype's label
-        std::vector<float> pathvals(num_samples, std::numeric_limits<float>::max());
+        // ====== Phase B: IFT (Image Foresting Transform) ======
+        std::vector<float> pathvals(num_samples, std::numeric_limits<float>::infinity());
         std::vector<int> preds(num_samples, -1);
         std::vector<int> labels(num_samples, -1);
+
+        // Priority queue for IFT: (cost, node_id)
+        std::priority_queue<PQElement, std::vector<PQElement>, std::greater<PQElement>> ift_pq;
 
         // Initialize prototypes
         for (int proto_idx : prototypes) {
             pathvals[proto_idx] = 0.0f;
-            labels[proto_idx] = primary_label->label;
+            labels[proto_idx] = sample_labels[proto_idx];
             preds[proto_idx] = -1;
+            ift_pq.push({0.0f, proto_idx});
         }
 
-        // Simplified propagation: nearest neighbor assignment
-        for (int i = 0; i < num_samples; ++i) {
-            if (pathvals[i] == 0.0f) continue;  // Skip prototypes
+        // IFT propagation with max(pathval, weight) cost function
+        std::vector<int> ordered_nodes;
+        while (!ift_pq.empty()) {
+            auto [curr_cost, p] = ift_pq.top();
+            ift_pq.pop();
 
-            float best_cost = std::numeric_limits<float>::max();
-            int best_pred = -1;
-            int best_label = -1;
+            if (curr_cost > pathvals[p]) continue;  // Already processed
 
-            // Find nearest prototype
-            for (int proto_idx : prototypes) {
-                // Cost = prototype's path value + distance to current sample
-                // Simplified: just use distance
-                float cost = pathvals[proto_idx];  // Start with proto's path value
-                
-                if (cost < best_cost) {
-                    best_cost = cost;
-                    best_pred = proto_idx;
-                    best_label = labels[proto_idx];
+            ordered_nodes.push_back(p);  // Add in pathval order
+
+            // Propagate to all neighbors
+            for (int q = 0; q < num_samples; ++q) {
+                if (pathvals[p] < pathvals[q]) {
+                    float weight = euclidean_distance(sample_features[p], sample_features[q]);
+                    float cost = std::max(pathvals[p], weight);  // OPF cost function
+
+                    if (cost < pathvals[q]) {
+                        pathvals[q] = cost;
+                        preds[q] = p;
+                        labels[q] = labels[p];
+                        ift_pq.push({cost, q});
+                    }
                 }
             }
-
-            if (best_pred != -1) {
-                pathvals[i] = best_cost;
-                preds[i] = best_pred;
-                labels[i] = best_label;
-            }
         }
-
-        // ====== Step 3: Order nodes by path value ======
-        std::vector<int> ordered_nodes(num_samples);
-        std::iota(ordered_nodes.begin(), ordered_nodes.end(), 0);
-        std::sort(ordered_nodes.begin(), ordered_nodes.end(),
-                  [&pathvals](int a, int b) { return pathvals[a] < pathvals[b]; });
 
         // ====== Store Results ======
         model->pathvalues = pathvals;
         model->predecessors = preds;
         model->node_labels = labels;
         model->ordered_nodes = ordered_nodes;
+
+        // Store prototype features for classification
+        model->prototype_features.clear();
+        for (int proto_idx : prototypes) {
+            model->prototype_features.push_back(sample_features[proto_idx]);
+        }
 
         registry.addComponent<CModelParams>(entity_id, std::move(*model));
 

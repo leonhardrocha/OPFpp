@@ -84,6 +84,8 @@ struct CModelParams : IComponent {
     std::vector<int> predecessors;            // Predecessor node for each node in IFT
     std::vector<int> ordered_nodes;           // Nodes ordered by path value (for classification)
     std::vector<int> node_labels;             // Assigned labels for each node
+    std::vector<std::vector<float>> prototype_features;  // Feature vectors for prototypes (for distance computation)
+    std::vector<std::vector<float>> all_features;        // All training sample features (for subgraph training)
     int num_features{0};                      // Feature dimension
     int num_nodes{0};                         // Total number of nodes
     

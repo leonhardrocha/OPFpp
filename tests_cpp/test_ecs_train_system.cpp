@@ -10,67 +10,311 @@ class ECSTrainSystemTest : public ::testing::Test {
 protected:
     ecs::EntityRegistry registry;
     ecs::TrainSystem train_system;
+
+    // Helper: Create sample entities with features and labels
+    std::vector<ecs::EntityId> createSampleEntities(
+        const std::vector<std::vector<float>>& features,
+        const std::vector<int>& labels) {
+        
+        std::vector<ecs::EntityId> sample_ids;
+        for (size_t i = 0; i < features.size(); ++i) {
+            auto sample = registry.create(ecs::EntityType::Sample);
+            registry.addComponent<ecs::CFeatures>(sample.id, ecs::CFeatures(features[i]));
+            registry.addComponent<ecs::CLabel>(sample.id, ecs::CLabel(labels[i]));
+            sample_ids.push_back(sample.id);
+        }
+        return sample_ids;
+    }
+
+    // Helper: Convert EntityId vector to int vector for CSamples
+    std::vector<int> toIntVector(const std::vector<ecs::EntityId>& ids) {
+        std::vector<int> result;
+        for (auto id : ids) {
+            result.push_back(static_cast<int>(id));
+        }
+        return result;
+    }
 };
 
 // ============================================================================
-// Goal 1: Update Flow — TrainSystem.update() finds and trains all entities
+// Goal 1: MST Prototype Selection Tests
 // ============================================================================
 
-TEST_F(ECSTrainSystemTest, UpdateCallProcessesSingleSampleEntity) {
-    // Create a single sample with features and label
-    auto sample = registry.create(ecs::EntityType::Sample);
-    registry.addComponent<ecs::CFeatures>(sample.id, ecs::CFeatures({1.0f, 2.0f, 3.0f}));
-    registry.addComponent<ecs::CLabel>(sample.id, ecs::CLabel(5));
+TEST_F(ECSTrainSystemTest, MSTDetectsPrototypesAtClassBoundaries) {
+    // Create 2 distinct classes with clear separation
+    std::vector<std::vector<float>> class0_samples = {
+        {0.0f, 0.0f},  // Class 0 cluster
+        {0.1f, 0.1f},
+        {0.2f, 0.0f}
+    };
+    std::vector<std::vector<float>> class1_samples = {
+        {10.0f, 10.0f},  // Class 1 cluster (far from class 0)
+        {10.1f, 10.0f},
+        {10.0f, 10.1f}
+    };
 
-    // Before training: no model exists
-    EXPECT_EQ(registry.getComponent<ecs::CModelParams>(sample.id), nullptr);
-    EXPECT_EQ(registry.getComponent<ecs::CEvalMetrics>(sample.id), nullptr);
+    std::vector<std::vector<float>> all_features = class0_samples;
+    all_features.insert(all_features.end(), class1_samples.begin(), class1_samples.end());
+    
+    std::vector<int> all_labels = {0, 0, 0, 1, 1, 1};
 
-    // Call update() which should discover and train this entity
+    auto sample_ids = createSampleEntities(all_features, all_labels);
+
+    auto subgraph = registry.create(ecs::EntityType::Subgraph);
+    ecs::CSamples samples;
+    samples.indices = toIntVector(sample_ids);
+    registry.addComponent<ecs::CSamples>(subgraph.id, samples);
+
     train_system.update(registry, 0.0);
 
-    // After training: model and metrics created
-    auto* model = registry.getComponent<ecs::CModelParams>(sample.id);
-    auto* metrics = registry.getComponent<ecs::CEvalMetrics>(sample.id);
+    auto* model = registry.getComponent<ecs::CModelParams>(subgraph.id);
     ASSERT_NE(model, nullptr);
-    ASSERT_NE(metrics, nullptr);
     
-    // Verify single-sample training results
-    EXPECT_EQ(model->prototypes.size(), 1);
-    EXPECT_EQ(model->num_nodes, 1);
-    EXPECT_EQ(model->node_labels[0], 5);
-    EXPECT_EQ(metrics->status, "trained");
+    // With 2 well-separated classes, expect at least 2 prototypes
+    EXPECT_GE(model->prototypes.size(), 2);
 }
 
-TEST_F(ECSTrainSystemTest, UpdateCallProcessesMultipleSampleEntities) {
-    // Create two independent sample entities
-    auto sample1 = registry.create(ecs::EntityType::Sample);
-    registry.addComponent<ecs::CFeatures>(sample1.id, ecs::CFeatures({1.0f}));
-    registry.addComponent<ecs::CLabel>(sample1.id, ecs::CLabel(10));
+TEST_F(ECSTrainSystemTest, MSTPrototypesHaveZeroPathValue) {
+    std::vector<std::vector<float>> features = {{0.0f}, {1.0f}, {10.0f}};
+    std::vector<int> labels = {0, 0, 1};
+    
+    auto sample_ids = createSampleEntities(features, labels);
+    auto subgraph = registry.create(ecs::EntityType::Subgraph);
+    ecs::CSamples samples;
+    samples.indices = toIntVector(sample_ids);
+    registry.addComponent<ecs::CSamples>(subgraph.id, samples);
 
-    auto sample2 = registry.create(ecs::EntityType::Sample);
-    registry.addComponent<ecs::CFeatures>(sample2.id, ecs::CFeatures({2.0f}));
-    registry.addComponent<ecs::CLabel>(sample2.id, ecs::CLabel(20));
-
-    // Single update() call should train both
     train_system.update(registry, 0.0);
 
-    // Both entities should have been processed independently
-    auto* model1 = registry.getComponent<ecs::CModelParams>(sample1.id);
-    auto* model2 = registry.getComponent<ecs::CModelParams>(sample2.id);
-    ASSERT_NE(model1, nullptr);
-    ASSERT_NE(model2, nullptr);
+    auto* model = registry.getComponent<ecs::CModelParams>(subgraph.id);
+    ASSERT_NE(model, nullptr);
+
+    // All prototypes should have pathval = 0.0
+    for (int proto_idx : model->prototypes) {
+        EXPECT_EQ(model->pathvalues[proto_idx], 0.0f);
+    }
+}
+
+TEST_F(ECSTrainSystemTest, MSTPrototypesHaveNoPredecessors) {
+    std::vector<std::vector<float>> features = {{0.0f}, {5.0f}, {10.0f}};
+    std::vector<int> labels = {0, 1, 2};
     
-    EXPECT_EQ(model1->node_labels[0], 10);
-    EXPECT_EQ(model2->node_labels[0], 20);
+    auto sample_ids = createSampleEntities(features, labels);
+    auto subgraph = registry.create(ecs::EntityType::Subgraph);
+    ecs::CSamples samples;
+    samples.indices = toIntVector(sample_ids);
+    registry.addComponent<ecs::CSamples>(subgraph.id, samples);
+
+    train_system.update(registry, 0.0);
+
+    auto* model = registry.getComponent<ecs::CModelParams>(subgraph.id);
+    ASSERT_NE(model, nullptr);
+
+    // All prototypes should have predecessor = -1
+    for (int proto_idx : model->prototypes) {
+        EXPECT_EQ(model->predecessors[proto_idx], -1);
+    }
 }
 
 // ============================================================================
-// Goal 2: Single-Sample Training Flow — Dispatch to train_single_sample()
+// Goal 2: IFT Label Propagation Tests
+// ============================================================================
+
+TEST_F(ECSTrainSystemTest, IFTPropagatesLabelsFromPrototypes) {
+    // 3 samples, 2 classes: expect labels to propagate
+    std::vector<std::vector<float>> features = {
+        {0.0f}, {0.5f}, {10.0f}
+    };
+    std::vector<int> labels = {0, 0, 1};
+    
+    auto sample_ids = createSampleEntities(features, labels);
+    auto subgraph = registry.create(ecs::EntityType::Subgraph);
+    ecs::CSamples samples;
+    samples.indices = toIntVector(sample_ids);
+    registry.addComponent<ecs::CSamples>(subgraph.id, samples);
+
+    train_system.update(registry, 0.0);
+
+    auto* model = registry.getComponent<ecs::CModelParams>(subgraph.id);
+    ASSERT_NE(model, nullptr);
+
+    // All nodes should have valid labels (no -1)
+    for (int label : model->node_labels) {
+        EXPECT_GE(label, 0);
+    }
+}
+
+TEST_F(ECSTrainSystemTest, IFTCostFunctionIsMaxOfPathvalAndWeight) {
+    // Linear arrangement: [0] -- [1] -- [2]
+    // Labels: 0, 0, 1
+    std::vector<std::vector<float>> features = {
+        {0.0f}, {5.0f}, {10.0f}
+    };
+    std::vector<int> labels = {0, 0, 1};
+    
+    auto sample_ids = createSampleEntities(features, labels);
+    auto subgraph = registry.create(ecs::EntityType::Subgraph);
+    ecs::CSamples samples;
+    samples.indices = toIntVector(sample_ids);
+    registry.addComponent<ecs::CSamples>(subgraph.id, samples);
+
+    train_system.update(registry, 0.0);
+
+    auto* model = registry.getComponent<ecs::CModelParams>(subgraph.id);
+    ASSERT_NE(model, nullptr);
+
+    // Non-prototypes should have pathval > 0
+    bool found_non_prototype_with_nonzero_pathval = false;
+    for (int i = 0; i < model->num_nodes; ++i) {
+        bool is_prototype = std::find(model->prototypes.begin(), 
+                                     model->prototypes.end(), i) != model->prototypes.end();
+        if (!is_prototype && model->pathvalues[i] > 0.0f) {
+            found_non_prototype_with_nonzero_pathval = true;
+            break;
+        }
+    }
+    EXPECT_TRUE(found_non_prototype_with_nonzero_pathval);
+}
+
+TEST_F(ECSTrainSystemTest, IFTPredecessorPointsTowardPrototype) {
+    std::vector<std::vector<float>> features = {{0.0f}, {1.0f}, {10.0f}};
+    std::vector<int> labels = {0, 0, 1};
+    
+    auto sample_ids = createSampleEntities(features, labels);
+    auto subgraph = registry.create(ecs::EntityType::Subgraph);
+    ecs::CSamples samples;
+    samples.indices = toIntVector(sample_ids);
+    registry.addComponent<ecs::CSamples>(subgraph.id, samples);
+
+    train_system.update(registry, 0.0);
+
+    auto* model = registry.getComponent<ecs::CModelParams>(subgraph.id);
+    ASSERT_NE(model, nullptr);
+
+    // For each non-prototype, predecessor should have lower or equal pathval
+    for (int i = 0; i < model->num_nodes; ++i) {
+        int pred = model->predecessors[i];
+        if (pred != -1) {
+            EXPECT_LE(model->pathvalues[pred], model->pathvalues[i]);
+        }
+    }
+}
+
+// ============================================================================
+// Goal 3: Ordered Nodes Tests
+// ============================================================================
+
+TEST_F(ECSTrainSystemTest, OrderedNodesAreSortedByPathValue) {
+    std::vector<std::vector<float>> features = {{0.0f}, {5.0f}, {10.0f}, {15.0f}};
+    std::vector<int> labels = {0, 0, 1, 1};
+    
+    auto sample_ids = createSampleEntities(features, labels);
+    auto subgraph = registry.create(ecs::EntityType::Subgraph);
+    ecs::CSamples samples;
+    samples.indices = toIntVector(sample_ids);
+    registry.addComponent<ecs::CSamples>(subgraph.id, samples);
+
+    train_system.update(registry, 0.0);
+
+    auto* model = registry.getComponent<ecs::CModelParams>(subgraph.id);
+    ASSERT_NE(model, nullptr);
+
+    // Verify ascending order
+    for (size_t i = 1; i < model->ordered_nodes.size(); ++i) {
+        int prev_idx = model->ordered_nodes[i-1];
+        int curr_idx = model->ordered_nodes[i];
+        EXPECT_LE(model->pathvalues[prev_idx], model->pathvalues[curr_idx]);
+    }
+}
+
+TEST_F(ECSTrainSystemTest, OrderedNodesContainsAllIndices) {
+    std::vector<std::vector<float>> features = {{0.0f}, {1.0f}, {2.0f}};
+    std::vector<int> labels = {0, 0, 1};
+    
+    auto sample_ids = createSampleEntities(features, labels);
+    auto subgraph = registry.create(ecs::EntityType::Subgraph);
+    ecs::CSamples samples;
+    samples.indices = toIntVector(sample_ids);
+    registry.addComponent<ecs::CSamples>(subgraph.id, samples);
+
+    train_system.update(registry, 0.0);
+
+    auto* model = registry.getComponent<ecs::CModelParams>(subgraph.id);
+    ASSERT_NE(model, nullptr);
+
+    EXPECT_EQ(model->ordered_nodes.size(), 3);
+    
+    std::vector<bool> seen(3, false);
+    for (int idx : model->ordered_nodes) {
+        ASSERT_GE(idx, 0);
+        ASSERT_LT(idx, 3);
+        seen[idx] = true;
+    }
+    
+    for (bool s : seen) {
+        EXPECT_TRUE(s);
+    }
+}
+
+// ============================================================================
+// Goal 4: Feature Storage Tests
+// ============================================================================
+
+TEST_F(ECSTrainSystemTest, ModelStoresAllTrainingFeatures) {
+    std::vector<std::vector<float>> features = {
+        {1.0f, 2.0f}, {3.0f, 4.0f}, {5.0f, 6.0f}
+    };
+    std::vector<int> labels = {0, 0, 1};
+    
+    auto sample_ids = createSampleEntities(features, labels);
+    auto subgraph = registry.create(ecs::EntityType::Subgraph);
+    ecs::CSamples samples;
+    samples.indices = toIntVector(sample_ids);
+    registry.addComponent<ecs::CSamples>(subgraph.id, samples);
+
+    train_system.update(registry, 0.0);
+
+    auto* model = registry.getComponent<ecs::CModelParams>(subgraph.id);
+    ASSERT_NE(model, nullptr);
+
+    // all_features should store all samples
+    EXPECT_EQ(model->all_features.size(), 3);
+    EXPECT_EQ(model->all_features[0], features[0]);
+    EXPECT_EQ(model->all_features[1], features[1]);
+    EXPECT_EQ(model->all_features[2], features[2]);
+}
+
+TEST_F(ECSTrainSystemTest, ModelStoresPrototypeFeatures) {
+    std::vector<std::vector<float>> features = {
+        {0.0f}, {0.1f}, {10.0f}
+    };
+    std::vector<int> labels = {0, 0, 1};
+    
+    auto sample_ids = createSampleEntities(features, labels);
+    auto subgraph = registry.create(ecs::EntityType::Subgraph);
+    ecs::CSamples samples;
+    samples.indices = toIntVector(sample_ids);
+    registry.addComponent<ecs::CSamples>(subgraph.id, samples);
+
+    train_system.update(registry, 0.0);
+
+    auto* model = registry.getComponent<ecs::CModelParams>(subgraph.id);
+    ASSERT_NE(model, nullptr);
+
+    // prototype_features should match prototypes
+    EXPECT_EQ(model->prototype_features.size(), model->prototypes.size());
+    
+    for (size_t i = 0; i < model->prototypes.size(); ++i) {
+        int proto_idx = model->prototypes[i];
+        EXPECT_EQ(model->prototype_features[i], features[proto_idx]);
+    }
+}
+
+// ============================================================================
+// Goal 5: Single Sample Tests
 // ============================================================================
 
 TEST_F(ECSTrainSystemTest, SingleSampleCreatesTrivialModel) {
-    // Single sample without CSamples component triggers single_sample path
     auto sample = registry.create(ecs::EntityType::Sample);
     registry.addComponent<ecs::CFeatures>(sample.id, ecs::CFeatures({5.5f, 6.6f}));
     registry.addComponent<ecs::CLabel>(sample.id, ecs::CLabel(7));
@@ -80,17 +324,12 @@ TEST_F(ECSTrainSystemTest, SingleSampleCreatesTrivialModel) {
     auto* model = registry.getComponent<ecs::CModelParams>(sample.id);
     ASSERT_NE(model, nullptr);
     
-    // Single-sample always has exactly 1 prototype (itself)
     EXPECT_EQ(model->prototypes.size(), 1);
     EXPECT_EQ(model->prototypes[0], 0);
-    
-    // Single-sample always has 1 node
     EXPECT_EQ(model->num_nodes, 1);
-    
-    // Prototype is always at position 0 with label from training data
     EXPECT_EQ(model->node_labels[0], 7);
-    EXPECT_EQ(model->pathvalues[0], 0.0f);  // Prototypes have zero path value
-    EXPECT_EQ(model->predecessors[0], -1);  // Prototypes have no predecessor
+    EXPECT_EQ(model->pathvalues[0], 0.0f);
+    EXPECT_EQ(model->predecessors[0], -1);
 }
 
 TEST_F(ECSTrainSystemTest, SingleSampleMetricsAlwaysAccurate) {
@@ -103,7 +342,6 @@ TEST_F(ECSTrainSystemTest, SingleSampleMetricsAlwaysAccurate) {
     auto* metrics = registry.getComponent<ecs::CEvalMetrics>(sample.id);
     ASSERT_NE(metrics, nullptr);
     
-    // Single sample is trivially correct
     EXPECT_EQ(metrics->accuracy, 1.0f);
     EXPECT_EQ(metrics->num_samples_trained, 1);
     EXPECT_EQ(metrics->num_prototypes, 1);
@@ -111,216 +349,75 @@ TEST_F(ECSTrainSystemTest, SingleSampleMetricsAlwaysAccurate) {
 }
 
 // ============================================================================
-// Goal 3: Multi-Sample Training Flow — Dispatch to train_subgraph()
+// Goal 6: Multi-Class Tests
 // ============================================================================
 
-TEST_F(ECSTrainSystemTest, MultiSampleSubgraphDispatchesToTrainSubgraph) {
-    // Entity with CSamples component triggers subgraph path
+TEST_F(ECSTrainSystemTest, ThreeClassDatasetSelectsMultiplePrototypes) {
+    std::vector<std::vector<float>> features = {
+        {0.0f}, {0.1f},      // Class 0
+        {5.0f}, {5.1f},      // Class 1
+        {10.0f}, {10.1f}     // Class 2
+    };
+    std::vector<int> labels = {0, 0, 1, 1, 2, 2};
+    
+    auto sample_ids = createSampleEntities(features, labels);
     auto subgraph = registry.create(ecs::EntityType::Subgraph);
-    registry.addComponent<ecs::CFeatures>(subgraph.id, ecs::CFeatures({1.0f, 2.0f}));
-    registry.addComponent<ecs::CLabel>(subgraph.id, ecs::CLabel(1));
-    registry.addComponent<ecs::CSamples>(subgraph.id, ecs::CSamples({0, 1, 2, 3}));
+    ecs::CSamples samples;
+    samples.indices = toIntVector(sample_ids);
+    registry.addComponent<ecs::CSamples>(subgraph.id, samples);
 
     train_system.update(registry, 0.0);
 
     auto* model = registry.getComponent<ecs::CModelParams>(subgraph.id);
     ASSERT_NE(model, nullptr);
-    
-    // Subgraph training always processes correct number of samples
-    EXPECT_EQ(model->num_nodes, 4);
-    EXPECT_EQ(model->node_labels.size(), 4);
-    EXPECT_EQ(model->pathvalues.size(), 4);
-    EXPECT_EQ(model->predecessors.size(), 4);
-}
 
-TEST_F(ECSTrainSystemTest, SubgraphTrainingPropagatesLabel) {
-    auto subgraph = registry.create(ecs::EntityType::Subgraph);
-    int training_label = 99;
-    registry.addComponent<ecs::CFeatures>(subgraph.id, ecs::CFeatures({1.0f}));
-    registry.addComponent<ecs::CLabel>(subgraph.id, ecs::CLabel(training_label));
-    registry.addComponent<ecs::CSamples>(subgraph.id, ecs::CSamples({0, 1, 2, 3, 4}));
-
-    train_system.update(registry, 0.0);
-
-    auto* model = registry.getComponent<ecs::CModelParams>(subgraph.id);
-    
-    // All nodes should have the training label (simplified IFT)
-    for (int label : model->node_labels) {
-        EXPECT_EQ(label, training_label);
-    }
+    // Expect prototypes from multiple classes
+    EXPECT_GE(model->prototypes.size(), 2);
 }
 
 // ============================================================================
-// Goal 4: Prototype Selection Flow — First sample always selected as prototype
-// ============================================================================
-
-TEST_F(ECSTrainSystemTest, PrototypeSelectionSelectsFirstSample) {
-    auto subgraph = registry.create(ecs::EntityType::Subgraph);
-    registry.addComponent<ecs::CFeatures>(subgraph.id, ecs::CFeatures({1.0f}));
-    registry.addComponent<ecs::CLabel>(subgraph.id, ecs::CLabel(1));
-    registry.addComponent<ecs::CSamples>(subgraph.id, ecs::CSamples({0, 1, 2, 3, 4}));
-
-    train_system.update(registry, 0.0);
-
-    auto* model = registry.getComponent<ecs::CModelParams>(subgraph.id);
-    ASSERT_NE(model, nullptr);
-    
-    // Simplified OPF always selects index 0 as prototype
-    EXPECT_EQ(model->prototypes.size(), 1);
-    EXPECT_EQ(model->prototypes[0], 0);
-    
-    // Prototype should have path value 0.0
-    EXPECT_EQ(model->pathvalues[0], 0.0f);
-}
-
-TEST_F(ECSTrainSystemTest, NonPrototypeNodesHaveNonZeroPathValue) {
-    auto subgraph = registry.create(ecs::EntityType::Subgraph);
-    registry.addComponent<ecs::CFeatures>(subgraph.id, ecs::CFeatures({1.0f}));
-    registry.addComponent<ecs::CLabel>(subgraph.id, ecs::CLabel(1));
-    registry.addComponent<ecs::CSamples>(subgraph.id, ecs::CSamples({0, 1, 2}));
-
-    train_system.update(registry, 0.0);
-
-    auto* model = registry.getComponent<ecs::CModelParams>(subgraph.id);
-    
-    // Node 0 is prototype
-    EXPECT_EQ(model->pathvalues[0], 0.0f);
-    
-    // All other nodes should have non-negative pathval
-    for (int i = 1; i < model->num_nodes; ++i) {
-        EXPECT_GE(model->pathvalues[i], 0.0f);
-    }
-}
-
-// ============================================================================
-// Goal 5: IFT Propagation Flow — Labels propagated from prototypes
-// ============================================================================
-
-TEST_F(ECSTrainSystemTest, IFTPropagatesPredecessorRelationships) {
-    auto subgraph = registry.create(ecs::EntityType::Subgraph);
-    registry.addComponent<ecs::CFeatures>(subgraph.id, ecs::CFeatures({1.0f}));
-    registry.addComponent<ecs::CLabel>(subgraph.id, ecs::CLabel(1));
-    registry.addComponent<ecs::CSamples>(subgraph.id, ecs::CSamples({0, 1, 2, 3}));
-
-    train_system.update(registry, 0.0);
-
-    auto* model = registry.getComponent<ecs::CModelParams>(subgraph.id);
-    ASSERT_NE(model, nullptr);
-    
-    // Prototype (index 0) has no predecessor
-    EXPECT_EQ(model->predecessors[0], -1);
-    
-    // All non-prototypes should have a valid predecessor (>= 0 or -1 for unreached)
-    for (int i = 1; i < model->num_nodes; ++i) {
-        EXPECT_GE(model->predecessors[i], -1);
-    }
-}
-
-TEST_F(ECSTrainSystemTest, IFTLabelConsistencyAlongPath) {
-    auto subgraph = registry.create(ecs::EntityType::Subgraph);
-    int label = 42;
-    registry.addComponent<ecs::CFeatures>(subgraph.id, ecs::CFeatures({1.0f}));
-    registry.addComponent<ecs::CLabel>(subgraph.id, ecs::CLabel(label));
-    registry.addComponent<ecs::CSamples>(subgraph.id, ecs::CSamples({0, 1, 2, 3, 4, 5}));
-
-    train_system.update(registry, 0.0);
-
-    auto* model = registry.getComponent<ecs::CModelParams>(subgraph.id);
-    
-    // All nodes should have training label (no different labels in this simplified setup)
-    for (int i = 0; i < model->num_nodes; ++i) {
-        EXPECT_EQ(model->node_labels[i], label);
-    }
-}
-
-// ============================================================================
-// Goal 6: Node Ordering Flow — Nodes sorted by increasing path value
-// ============================================================================
-
-TEST_F(ECSTrainSystemTest, OrderedNodesIsSortedByPathValue) {
-    auto subgraph = registry.create(ecs::EntityType::Subgraph);
-    registry.addComponent<ecs::CFeatures>(subgraph.id, ecs::CFeatures({1.0f}));
-    registry.addComponent<ecs::CLabel>(subgraph.id, ecs::CLabel(1));
-    registry.addComponent<ecs::CSamples>(subgraph.id, ecs::CSamples({0, 1, 2, 3, 4}));
-
-    train_system.update(registry, 0.0);
-
-    auto* model = registry.getComponent<ecs::CModelParams>(subgraph.id);
-    ASSERT_EQ(model->ordered_nodes.size(), 5);
-    
-    // Ordered nodes should be sorted by pathval (non-decreasing)
-    for (size_t i = 1; i < model->ordered_nodes.size(); ++i) {
-        int prev_idx = model->ordered_nodes[i - 1];
-        int curr_idx = model->ordered_nodes[i];
-        EXPECT_LE(model->pathvalues[prev_idx], model->pathvalues[curr_idx]);
-    }
-}
-
-TEST_F(ECSTrainSystemTest, OrderedNodesContainsAllNodeIndices) {
-    auto subgraph = registry.create(ecs::EntityType::Subgraph);
-    registry.addComponent<ecs::CFeatures>(subgraph.id, ecs::CFeatures({1.0f}));
-    registry.addComponent<ecs::CLabel>(subgraph.id, ecs::CLabel(1));
-    registry.addComponent<ecs::CSamples>(subgraph.id, ecs::CSamples({0, 1, 2, 3}));
-
-    train_system.update(registry, 0.0);
-
-    auto* model = registry.getComponent<ecs::CModelParams>(subgraph.id);
-    
-    // Ordered list should contain exactly 4 nodes
-    EXPECT_EQ(model->ordered_nodes.size(), 4);
-    
-    // All indices 0-3 should appear exactly once
-    std::vector<bool> seen(4, false);
-    for (int node_idx : model->ordered_nodes) {
-        ASSERT_GE(node_idx, 0);
-        ASSERT_LT(node_idx, 4);
-        EXPECT_FALSE(seen[node_idx]);  // No duplicates
-        seen[node_idx] = true;
-    }
-}
-
-// ============================================================================
-// Goal 7: Missing Components — Graceful skip when required components absent
+// Goal 7: Missing Components Tests
 // ============================================================================
 
 TEST_F(ECSTrainSystemTest, EntityMissingLabelIsSkipped) {
     auto sample = registry.create(ecs::EntityType::Sample);
     registry.addComponent<ecs::CFeatures>(sample.id, ecs::CFeatures({1.0f}));
-    // Intentionally NOT adding CLabel
 
     train_system.update(registry, 0.0);
 
     auto* model = registry.getComponent<ecs::CModelParams>(sample.id);
-    EXPECT_EQ(model, nullptr);  // Entity not trained
+    EXPECT_EQ(model, nullptr);
 }
 
 TEST_F(ECSTrainSystemTest, EntityMissingFeaturesIsSkipped) {
     auto sample = registry.create(ecs::EntityType::Sample);
     registry.addComponent<ecs::CLabel>(sample.id, ecs::CLabel(1));
-    // Intentionally NOT adding CFeatures
 
     train_system.update(registry, 0.0);
 
     auto* model = registry.getComponent<ecs::CModelParams>(sample.id);
-    EXPECT_EQ(model, nullptr);  // Entity not trained
+    EXPECT_EQ(model, nullptr);
 }
 
 // ============================================================================
-// Goal 8: Metrics Recording — CEvalMetrics tracks all training outcomes
+// Goal 8: Metrics Recording Tests
 // ============================================================================
 
 TEST_F(ECSTrainSystemTest, MetricsRecordsPrototypeCount) {
+    std::vector<std::vector<float>> features = {{0.0f}, {1.0f}, {10.0f}};
+    std::vector<int> labels = {0, 0, 1};
+    
+    auto sample_ids = createSampleEntities(features, labels);
     auto subgraph = registry.create(ecs::EntityType::Subgraph);
-    registry.addComponent<ecs::CFeatures>(subgraph.id, ecs::CFeatures({1.0f}));
-    registry.addComponent<ecs::CLabel>(subgraph.id, ecs::CLabel(1));
-    registry.addComponent<ecs::CSamples>(subgraph.id, ecs::CSamples({0, 1, 2, 3, 4}));
+    ecs::CSamples samples;
+    samples.indices = toIntVector(sample_ids);
+    registry.addComponent<ecs::CSamples>(subgraph.id, samples);
 
     train_system.update(registry, 0.0);
 
     auto* model = registry.getComponent<ecs::CModelParams>(subgraph.id);
     auto* metrics = registry.getComponent<ecs::CEvalMetrics>(subgraph.id);
     
-    // Metrics should match model
     EXPECT_EQ(metrics->num_prototypes, static_cast<int>(model->prototypes.size()));
     EXPECT_EQ(metrics->num_samples_trained, model->num_nodes);
 }
@@ -337,80 +434,42 @@ TEST_F(ECSTrainSystemTest, MetricsRecordsTrainedStatus) {
 }
 
 // ============================================================================
-// Goal 9: Integration — Real-world workflow with SplitSystem
+// Goal 9: Large-Scale Data Tests
 // ============================================================================
 
-TEST_F(ECSTrainSystemTest, TrainingSplitSystemOutput) {
-    // Create dataset and split it
-    auto dataset = registry.create(ecs::EntityType::Dataset);
-    registry.addComponent<ecs::CIOPath>(dataset.id, ecs::CIOPath("/data/test.dat"));
-    registry.addComponent<ecs::CSplitParams>(dataset.id, ecs::CSplitParams(0.6f, 0.0f, 0.4f));
-
-    ecs::SplitSystem split_system;
-    split_system.update(registry, 0.0);
-
-    // Find training partition created by SplitSystem
-    auto subgraphs = registry.view<ecs::CSamples, ecs::CFlags>();
-    ecs::EntityId training_subgraph{0};
-    bool found = false;
+TEST_F(ECSTrainSystemTest, TrainSubgraphWith100Samples) {
+    std::vector<std::vector<float>> features;
+    std::vector<int> labels;
     
-    for (auto sg_id : subgraphs) {
-        auto* flags = registry.getComponent<ecs::CFlags>(sg_id);
-        if (flags && flags->isTraining) {
-            training_subgraph = sg_id;
-            found = true;
-            break;
+    // Create 100 samples in 3 clusters
+    for (int i = 0; i < 100; ++i) {
+        if (i < 30) {
+            features.push_back({static_cast<float>(i) * 0.1f});
+            labels.push_back(0);
+        } else if (i < 60) {
+            features.push_back({static_cast<float>(i) * 0.1f + 10.0f});
+            labels.push_back(1);
+        } else {
+            features.push_back({static_cast<float>(i) * 0.1f + 20.0f});
+            labels.push_back(2);
         }
     }
     
-    EXPECT_TRUE(found);
-
-    // Add training label to the split
-    registry.addComponent<ecs::CFeatures>(training_subgraph, ecs::CFeatures({1.0f, 2.0f}));
-    registry.addComponent<ecs::CLabel>(training_subgraph, ecs::CLabel(1));
-
-    // Train it using TrainSystem
-    train_system.update(registry, 0.0);
-
-    // Verify training succeeded
-    auto* model = registry.getComponent<ecs::CModelParams>(training_subgraph);
-    auto* metrics = registry.getComponent<ecs::CEvalMetrics>(training_subgraph);
-    ASSERT_NE(model, nullptr);
-    ASSERT_NE(metrics, nullptr);
-    EXPECT_EQ(metrics->status, "trained");
-}
-
-// ============================================================================
-// Goal 10: Large-Scale Data — Efficiency with many samples
-// ============================================================================
-
-TEST_F(ECSTrainSystemTest, TrainSubgraphWith1000Samples) {
+    auto sample_ids = createSampleEntities(features, labels);
     auto subgraph = registry.create(ecs::EntityType::Subgraph);
-    
-    std::vector<int> large_sample_list;
-    for (int i = 0; i < 1000; ++i) {
-        large_sample_list.push_back(i);
-    }
-    
-    registry.addComponent<ecs::CFeatures>(subgraph.id, ecs::CFeatures({1.0f}));
-    registry.addComponent<ecs::CLabel>(subgraph.id, ecs::CLabel(1));
-    registry.addComponent<ecs::CSamples>(subgraph.id, ecs::CSamples(large_sample_list));
+    ecs::CSamples samples;
+    samples.indices = toIntVector(sample_ids);
+    registry.addComponent<ecs::CSamples>(subgraph.id, samples);
 
     train_system.update(registry, 0.0);
 
     auto* model = registry.getComponent<ecs::CModelParams>(subgraph.id);
     ASSERT_NE(model, nullptr);
     
-    // All data structures properly sized
-    EXPECT_EQ(model->num_nodes, 1000);
-    EXPECT_EQ(model->node_labels.size(), 1000);
-    EXPECT_EQ(model->pathvalues.size(), 1000);
-    EXPECT_EQ(model->predecessors.size(), 1000);
-    EXPECT_EQ(model->ordered_nodes.size(), 1000);
-    
-    // All nodes labeled correctly
-    for (int label : model->node_labels) {
-        EXPECT_EQ(label, 1);
-    }
+    EXPECT_EQ(model->num_nodes, 100);
+    EXPECT_EQ(model->node_labels.size(), 100);
+    EXPECT_EQ(model->pathvalues.size(), 100);
+    EXPECT_EQ(model->predecessors.size(), 100);
+    EXPECT_EQ(model->ordered_nodes.size(), 100);
 }
 

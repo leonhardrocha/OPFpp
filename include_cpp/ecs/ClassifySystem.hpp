@@ -3,13 +3,23 @@
 #include "System.h"
 #include "Components.hpp"
 #include "EntityRegistry.h"
-#include "../opf/Distance.hpp"
 #include <cmath>
 #include <vector>
 #include <algorithm>
 #include <limits>
 
 namespace ecs {
+
+// Euclidean distance function
+inline float euclidean_distance(const std::vector<float>& f1, const std::vector<float>& f2) {
+    if (f1.size() != f2.size()) return std::numeric_limits<float>::infinity();
+    float dist = 0.0f;
+    for (size_t i = 0; i < f1.size(); ++i) {
+        float diff = f1[i] - f2[i];
+        dist += diff * diff;
+    }
+    return std::sqrt(dist);
+}
 
 /**
  * @class ClassifySystem
@@ -80,22 +90,23 @@ private:
             int node_idx = model->ordered_nodes[j];
             
             // Early termination: if min_cost is less than or equal to current pathval,
-            // no future prototype can have lower cost (because they're sorted)
+            // no future node can have lower cost (because they're sorted by pathval)
             if (min_cost <= model->pathvalues[node_idx]) {
                 break;
             }
 
-            // Compute distance from test sample to this prototype
-            // Note: prototypes stores indices, need to get actual features from somewhere
-            // For now, simplified: assume distance is 0 (will fix with proper feature lookup)
-            float weight = 0.0f; // TODO: Need actual feature vectors for prototypes
+            // Compute distance from test sample to training sample
+            // Use all_features which stores all training sample features
+            if (node_idx >= 0 && node_idx < static_cast<int>(model->all_features.size())) {
+                float weight = euclidean_distance(model->all_features[node_idx], test_features->values);
 
-            // OPF cost: max of path value and distance
-            float cost = std::max(model->pathvalues[node_idx], weight);
+                // OPF cost: max of training node's pathval and distance to test sample
+                float cost = std::max(model->pathvalues[node_idx], weight);
 
-            if (cost < min_cost) {
-                min_cost = cost;
-                final_label = model->node_labels[node_idx];
+                if (cost < min_cost) {
+                    min_cost = cost;
+                    final_label = model->node_labels[node_idx];
+                }
             }
         }
 
