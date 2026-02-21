@@ -54,9 +54,9 @@ int main() {
     const char* opf_classify = "./opf_classify_cpp";
     const char* opf_accuracy = "./opf_accuracy_cpp";
 #endif
-    const char* data_file = "../data/saturn.dat";
+    const char* data_file = "./data/saturn.dat";
 
-    if (opf_split_run("../data/saturn.dat", 0.6f, 0.2f, 0.2f) != 0) return 1;
+    if (opf_split_run("./data/saturn.dat", 0.6f, 0.2f, 0.2f) != 0) return 1;
     if (!copy_file("training.dat", "Z1.dat")) return 1;
     if (!copy_file("testing.dat", "Z3.dat")) return 1;
     remove("training.dat");

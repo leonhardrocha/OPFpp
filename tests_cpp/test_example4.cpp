@@ -20,12 +20,12 @@ int main() {
     const char* opf_classify = "./opf_classify_cpp";
     const char* opf_accuracy = "./opf_accuracy_cpp";
 #endif
-    const char* data_file = "../data/cone-torus.dat";
+    const char* data_file = "./data/cone-torus.dat";
 
     (void)0; // nothing platform-specific needed; calling API wrappers directly
 
-    if (opf_distance_run("../data/cone-torus.dat", 3) != 0) return 1;
-    if (opf_split_run("../data/cone-torus.dat", 0.3f, 0.2f, 0.5f) != 0) return 1;
+    if (opf_distance_run("./data/cone-torus.dat", 3) != 0) return 1;
+    if (opf_split_run("./data/cone-torus.dat", 0.3f, 0.2f, 0.5f) != 0) return 1;
     if (opf_learn_run("training.dat", "evaluating.dat") != 0) return 1;
     if (opf_classify_run("testing.dat", "classifier.opf") != 0) return 1;
     if (opf_accuracy_run("testing.dat") != 0) return 1;

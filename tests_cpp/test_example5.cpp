@@ -21,7 +21,7 @@ int main() {
     
     char command[512];
 
-    const char* data_files[] = {"../data/data1.dat", "../data/data2.dat", "../data/data3.dat", "../data/data4.dat", "../data/data5.dat"};
+    const char* data_files[] = {"./data/data1.dat", "./data/data2.dat", "./data/data3.dat", "./data/data4.dat", "./data/data5.dat"};
     const int ks[] = {100, 100, 20, 100, 50};
     const int p2s[] = {1, 2, 2, 2, 1};
     const double p3s[] = {0.2, 0.01, 0.001, 0.02, 0.2};

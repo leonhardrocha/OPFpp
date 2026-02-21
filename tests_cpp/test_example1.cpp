@@ -12,7 +12,7 @@ int main() {
     // the data directory is at ../data.
 
     // Call the library-level functions directly (no external processes)
-    if (opf_split_run("../data/boat.dat", 0.5f, 0.0f, 0.5f) != 0) return 1;
+    if (opf_split_run("./data/boat.dat", 0.5f, 0.0f, 0.5f) != 0) return 1;
     if (opf_train_run("training.dat") != 0) return 1;
     if (opf_classify_run("testing.dat", "classifier.opf") != 0) return 1;
     if (opf_accuracy_run("testing.dat") != 0) return 1;
