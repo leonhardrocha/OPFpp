@@ -265,4 +265,318 @@ class SplitSystem : public ISystem {
 
 Generated at: automated exploratory note with implementation updates
 
+---
+
+## 14. Deep Dive: OPF Training and Classification Workflow (from test_example3.cpp)
+
+### Research Objective
+Analysis of the actual OPF training and classification implementation to understand inner method workflows, data structures, and algorithm details. Based on tracing test_example3.cpp execution flow.
+
+### Test Workflow Overview (test_example3.cpp)
+
+The test follows this sequence:
+1. `opf_split_run()` - Split dataset into training.dat and testing.dat
+2. `opf_train_run(training.dat)` - Train OPF classifier
+3. `opf_classify_run(testing.dat, classifier.opf)` - Classify test samples
+4. `opf_accuracy_run(testing.dat)` - Compute accuracy
+
+### Training Workflow Deep Dive
+
+#### Entry Point: `opf_train_run(dataset)` → `src_cpp/opf_train.cpp`
+
+**Step 1: Load Training Data**
+```cpp
+auto subgraph = opf::ReadSubgraph_original<float>(dataset.c_str());
+```
+- Reads binary .dat file containing:
+  - `nnodes`: number of samples
+  - `nlabels`: number of unique classes
+  - `nfeats`: feature vector dimension
+  - For each node: position, truelabel, feature vector
+- Creates `Subgraph<float>` object with all training samples
+
+**Step 2: Initialize OPF Classifier**
+```cpp
+opf::OPF<float> opf_classifier;
+```
+
+**Step 3: Execute Training**
+```cpp
+opf_classifier.training(subgraph);
+```
+
+#### Training Algorithm: `OPF<T>::training()` → `include_cpp/opf/OPF.hpp` (lines 108-148)
+
+**Phase A: Prototype Selection via MST**
+```cpp
+mstPrototypes(sg);
+```
+
+##### MST Prototype Selection Algorithm (Prim's Algorithm)
+
+Location: `OPF<T>::mstPrototypes()` → `include_cpp/opf/OPF.hpp` (lines 19-74)
+
+**Purpose**: Find samples that lie on class boundaries (prototypes)
+
+**Data Structures**:
+- `pathval[]`: Float array tracking minimum edge weight from MST to each node
+- `priority_queue Q`: Min-heap for Prim's algorithm (cost, node_id pairs)
+- Node status: 0 = normal, 1 = prototype
+
+**Algorithm Steps**:
+
+1. **Initialization**:
+   ```cpp
+   pathval[all nodes] = ∞
+   pathval[0] = 0  // Start MST from node 0
+   status[all nodes] = 0
+   Q.push({0, node_0})
+   ```
+
+2. **MST Construction (Prim's Algorithm)**:
+   ```cpp
+   while (!Q.empty()) {
+       p = Q.top(); Q.pop();
+       
+       // For each unvisited node q
+       for each q in unvisited:
+           weight = euclDist(feat[p], feat[q])
+           if (weight < pathval[q]):
+               pathval[q] = weight
+               predecessor[q] = p
+               Q.push({weight, q})
+   ```
+
+3. **Prototype Detection**:
+   ```cpp
+   if (predecessor[p] != NIL):
+       if (truelabel[p] != truelabel[predecessor[p]]):
+           // Found class boundary edge!
+           status[p] = PROTOTYPE
+           status[predecessor[p]] = PROTOTYPE
+   ```
+
+**Key Insight**: Prototypes are nodes where the MST crosses between different classes. These represent samples on class decision boundaries.
+
+**Phase B: IFT (Image Foresting Transform)**
+
+Location: `OPF<T>::training()` → lines 109-148
+
+**Purpose**: Propagate labels from prototypes to all samples via optimal paths
+
+**Data Structures**:
+- `pathval[]`: Cost of optimal path from nearest prototype
+- `priority_queue Q`: Min-heap for Dijkstra-like propagation
+- `ordered_list_of_nodes[]`: Nodes sorted by pathval (for classification)
+
+**Algorithm Steps**:
+
+1. **Initialize Prototypes**:
+   ```cpp
+   for each node p:
+       if (status[p] == PROTOTYPE):
+           pathval[p] = 0
+           label[p] = truelabel[p]
+           predecessor[p] = NIL
+           Q.push({0, p})
+       else:
+           pathval[p] = ∞
+   ```
+
+2. **IFT Propagation (Modified Dijkstra)**:
+   ```cpp
+   while (!Q.empty()):
+       p = Q.top(); Q.pop()
+       ordered_list_of_nodes.add(p)  // Add in pathval order
+       
+       for each neighbor q where pathval[p] < pathval[q]:
+           weight = euclDist(feat[p], feat[q])
+           cost = max(pathval[p], weight)  // Path cost function
+           
+           if (cost < pathval[q]):
+               pathval[q] = cost
+               predecessor[q] = p
+               label[q] = label[p]  // Propagate label
+               Q.push({cost, q})
+   ```
+
+**Cost Function**: `cost = max(pathval[root], edge_weight)`
+- This is the **supremum of edge weights** along the path from prototype to sample
+- Ensures labels propagate from nearest prototypes (minimum maximum edge weight)
+
+3. **Result Storage**:
+   ```cpp
+   // Nodes stored in ordered_list_of_nodes[] sorted by pathval
+   // This ordering is critical for efficient classification
+   ```
+
+**Step 4: Save Trained Model**
+```cpp
+subgraph.writeModel("classifier.opf");
+```
+
+Saves to disk:
+- All node data (position, label, pathval, predecessor, status, features)
+- Ordered list of nodes
+- Metadata (nnodes, nlabels, nfeats)
+
+### Classification Workflow Deep Dive
+
+#### Entry Point: `opf_classify_run(test_dataset, model_file)` → `src_cpp/opf_classify.cpp`
+
+**Step 1: Load Test Data**
+```cpp
+auto sg_test = opf::ReadSubgraph_original<float>(test_dataset.c_str());
+```
+
+**Step 2: Load Trained Model**
+```cpp
+auto sg_train = opf::Subgraph<float>::readModel(model_file.c_str());
+```
+- Loads full trained subgraph including:
+  - All training samples with features
+  - Computed pathval for each node
+  - ordered_list_of_nodes (sorted by pathval)
+  - Prototype status markers
+
+**Step 3: Execute Classification**
+```cpp
+opf_classifier.classifying(sg_train, sg_test);
+```
+
+#### Classification Algorithm: `OPF<T>::classifying()` → `include_cpp/opf/OPF.hpp` (lines 150-174)
+
+**Purpose**: Assign labels to test samples using trained model
+
+**Key Optimization**: Iterate through training nodes in pathval order (ordered_list_of_nodes)
+
+**Algorithm for Each Test Sample**:
+
+```cpp
+for each test_node in sg_test:
+    min_cost = ∞
+    final_label = -1
+    
+    for each train_node in ordered_list_of_nodes:
+        // Early termination optimization
+        if (min_cost <= train_node.pathval):
+            break  // No future nodes can have lower cost
+        
+        // Compute OPF cost
+        dist = euclDist(test_node.feat, train_node.feat)
+        cost = max(train_node.pathval, dist)
+        
+        if (cost < min_cost):
+            min_cost = cost
+            final_label = train_node.label
+    
+    test_node.label = final_label
+```
+
+**Cost Function**: `cost = max(training_pathval, distance_to_test)`
+- Represents the maximum edge weight on the path from nearest prototype through training_node to test_sample
+- Test sample is assigned to the class with minimum such cost
+
+**Critical Optimization**:
+- Training nodes are sorted by pathval (ascending)
+- Once `min_cost <= current_training_pathval`, all remaining nodes have higher pathval
+- Therefore, all future costs will be `>= min_cost`
+- Early termination saves computation on large datasets
+
+**Step 4: Write Classification Results**
+```cpp
+for each test_node:
+    outfile << test_node.label << endl
+// Writes to "testing.dat.out"
+```
+
+### Data Flow Summary
+
+```
+Training Phase:
+Dataset (.dat) 
+  → ReadSubgraph() 
+  → MST Prototypes (Prim's Algorithm)
+      → Detect class boundary nodes
+  → IFT (Modified Dijkstra)
+      → Propagate labels via optimal paths
+      → Store pathval and ordered_list
+  → writeModel() 
+  → classifier.opf
+
+Classification Phase:
+Test Dataset (.dat) + classifier.opf
+  → ReadSubgraph() + readModel()
+  → For each test sample:
+      → Iterate ordered training nodes
+      → Compute cost = max(pathval, distance)
+      → Early terminate when min_cost <= pathval
+      → Assign label with minimum cost
+  → Write predictions (.out)
+```
+
+### Key Algorithmic Insights
+
+1. **MST for Boundary Detection**: Prim's algorithm finds minimum spanning tree; class boundaries occur where MST edges connect different labels
+
+2. **IFT Cost Function**: `max(pathval, weight)` represents supremum of edge weights along path from prototype
+
+3. **Classification Efficiency**: Ordered traversal + early termination = O(k·n) instead of O(n·m) where k << n (k = nodes before early stop)
+
+4. **No Feature Storage Issue**: Training features ARE stored in classifier.opf, so distance computation during classification has full access to training feature vectors
+
+5. **Prototype Definition**: Not manually selected, but automatically detected at MST edges where `truelabel[node] != truelabel[predecessor]`
+
+### Implementation Gaps for ECS Systems
+
+**Current ECS Implementation Issues** (discovered through research):
+
+1. **ClassifySystem Distance Problem**: 
+   - CModelParams stores prototype indices, not feature vectors
+   - Cannot compute `euclDist()` without training features
+   - **Solution**: Store complete training Subgraph reference OR embed feature vectors in CModelParams
+
+2. **TrainSystem Simplification**:
+   - Current implementation uses simplified prototype selection (first sample)
+   - Missing full MST (Prim's) algorithm
+   - Missing boundary detection logic
+   - **Solution**: Implement mstPrototypes() equivalent in TrainSystem
+
+3. **Missing Ordered List**:
+   - Classification relies heavily on ordered_list_of_nodes for early termination
+   - Current CModelParams has ordered_nodes but may not be properly sorted
+   - **Solution**: Ensure IFT stores nodes in pathval order
+
+### Recommended ECS Architecture Changes
+
+**Option 1: Store Training Subgraph Reference**
+```cpp
+struct CModelParams {
+    EntityId training_subgraph_entity;  // Reference to training data
+    std::vector<int> prototypes;        // Indices into training subgraph
+    // ... rest of fields
+};
+```
+
+**Option 2: Embed Training Features in Model**
+```cpp
+struct CModelParams {
+    std::vector<std::vector<float>> training_features;  // Full feature matrix
+    std::vector<int> prototypes;
+    std::vector<float> pathvalues;
+    std::vector<int> ordered_nodes;
+    std::vector<int> node_labels;
+};
+```
+
+**Option 3: Hybrid Approach** (Recommended)
+- Store only prototype features (smaller memory footprint)
+- For classification, only prototypes are needed (not all training samples)
+- Update MST to track which samples become prototypes
+- Store `prototype_features[]` instead of all training features
+
+---
+
+Generated at: 2026-02-21 (deep workflow research findings)
+
 
