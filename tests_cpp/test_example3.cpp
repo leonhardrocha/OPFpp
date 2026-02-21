@@ -20,13 +20,26 @@ int main() {
     const char* opf_classify = "./opf_classify_cpp";
     const char* opf_accuracy = "./opf_accuracy_cpp";
 #endif
-    const char* data_file = "./data/cone-torus.dat";
+    const char* data_file = OPF_DATA_DIR "/cone-torus.dat";
 
-    if (opf_distance_run("./data/cone-torus.dat", 3) != 0) return 1;
-    if (opf_split_run("./data/cone-torus.dat", 0.5f, 0.0f, 0.5f) != 0) return 1;
+    if (opf_distance_run(OPF_DATA_DIR "/cone-torus.dat", 3) != 0) return 1;
+    if (opf_split_run(OPF_DATA_DIR "/cone-torus.dat", 0.5f, 0.0f, 0.5f) != 0) return 1;
     if (opf_train_run("training.dat") != 0) return 1;
     if (opf_classify_run("testing.dat", "classifier.opf") != 0) return 1;
     if (opf_accuracy_run("testing.dat") != 0) return 1;
+
+    // Cleanup generated files
+    remove_file("training.dat");
+    remove_file("testing.dat");
+    remove_file("distances.dat");
+    remove_file("classifier.opf");
+    remove_file("testing.dat.acc");
+    remove_file("testing.dat.time");
+    remove_file("testing.dat.out");
+    remove_file("training.dat.model");
+    remove_file("training.dat.acc");
+    remove_file("training.dat.time");
+    remove_file("training.dat.out");
 
     return 0;
 }

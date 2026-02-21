@@ -21,7 +21,7 @@ int main() {
     
     char command[512];
 
-    const char* data_files[] = {"./data/data1.dat", "./data/data2.dat", "./data/data3.dat", "./data/data4.dat", "./data/data5.dat"};
+    const char* data_files[] = {OPF_DATA_DIR "/data1.dat", OPF_DATA_DIR "/data2.dat", OPF_DATA_DIR "/data3.dat", OPF_DATA_DIR "/data4.dat", OPF_DATA_DIR "/data5.dat"};
     const int ks[] = {100, 100, 20, 100, 50};
     const int p2s[] = {1, 2, 2, 2, 1};
     const double p3s[] = {0.2, 0.01, 0.001, 0.02, 0.2};
@@ -33,6 +33,17 @@ int main() {
         if (opf_cluster_run("training.dat") != 0) return 1;        
         if (opf_knn_classify_run("testing.dat", "training.dat.model") != 0) return 1;
         if (opf_accuracy_run("testing.dat") != 0) return 1;
+
+        // Cleanup generated files for this iteration
+        remove_file("training.dat");
+        remove_file("testing.dat");
+        remove_file("training.dat.model");
+        remove_file("training.dat.acc");
+        remove_file("training.dat.time");
+        remove_file("training.dat.out");
+        remove_file("testing.dat.acc");
+        remove_file("testing.dat.time");
+        remove_file("testing.dat.out");
     }
 
     return 0;

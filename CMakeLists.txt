@@ -114,12 +114,4 @@ set_tests_properties(
     WORKING_DIRECTORY ${CMAKE_BINARY_DIR}
 )
 
-# Ensure the `data` directory from source is available in the build directory
-# so tests that use relative paths like "../data/..." or "./data/..." succeed.
-add_custom_target(copy_data ALL
-    COMMAND ${CMAKE_COMMAND} -E copy_directory
-            ${CMAKE_SOURCE_DIR}/data
-            ${CMAKE_BINARY_DIR}/data
-    COMMENT "Copying data files into build directory"
-)
 
