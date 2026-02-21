@@ -1,20 +1,6 @@
-<<<<<<< HEAD
-# Build artifacts
-build/
-*.exe
-*.dll
-*.so
-*.a
-*.out
-
-# CMake
-CMakeCache.txt
-CMakeFiles/
-cmake_install.cmake
-Makefile
-=======
 ﻿# CMake
 CMakeCache.txt
+CMakePresets.json
 CMakeFiles/
 CMakeScripts/
 cmake_install.cmake
@@ -93,4 +79,3 @@ coverage.*
 *.swp
 .DS_Store
 Thumbs.db
->>>>>>> f6757cce94cf63d30d1ae1407e2596e9cd29a24a
