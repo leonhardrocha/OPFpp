@@ -206,16 +206,25 @@ for (auto id : results) {
    - ✅ Created `CModelParams` component: stores prototypes, path values, predecessors, ordered nodes, labels
    - ✅ Created `CEvalMetrics` component: tracks training statistics, accuracy, num_prototypes
    - ✅ Implemented `TrainSystem` header with simplified IFT (Image Foresting Transform) algorithm
-   - ⚠️ Created 18 test cases BUT tests do NOT verify `train_entity()` dispatcher logic
-     - Tests only verify end results through public `update()` API
-     - Missing: Direct verification that `train_entity()` correctly routes to `train_single_sample()` vs `train_subgraph()` based on CSamples presence
-     - Missing: Internal dispatch behavior validation
-     - Tests verify: component creation, label propagation, metrics recording, ordering
+   - ⚠️ Created 18 test cases BUT tests do NOT verify internal `train_entity()` dispatcher logic
+     - Tests verify end results through public `update()` API (component creation, label propagation, metrics recording)
+     - **Tests don't verify dispatcher**: Cannot directly test private `train_entity()` method
+     - **Cannot independently test routing logic**: Would need to refactor method accessibility or use friend classes/functions
+     - **Tests only verify final output**: Single-sample vs multi-sample behavior is indirectly validated through results
+     - **Assessment**: Tests are useful for integration/end-to-end validation BUT not for unit-testing dispatcher mechanism
    - ✅ **All 18 tests passing** (0.28s execution time)
-   - 🔴 **Tests need redesign** to properly exercise `train_entity()` dispatcher method
-4. **Phase 2.2: ClassifySystem** — wrap `opf_classify` logic
-   - Input: Model entity (`CModelParams`) + test `Subgraph` (`CFeatures`)
-   - Output: Predicted labels
+   - 🟡 **Tests are adequate for functionality** but cannot directly validate dispatcher routing
+4. 🔴 **Phase 2.2: ClassifySystem** — wrap `opf_classify` logic (IMPLEMENTATION INCOMPLETE)
+   - ✅ Created `ClassifySystem.hpp` implementing OPF classification algorithm structure
+   - ✅ Implements cost-based routing: `cost = max(pathval, distance)`
+   - ✅ Early termination optimization when `min_cost <= next pathval`
+   - ✅ Created 16 comprehensive test cases
+   - 🔴 **CRITICAL ISSUE**: Distance computation not implemented
+     - `model->prototypes` stores indices, not feature vectors
+     - Cannot compute distance without access to original training features
+     - Current implementation uses `weight = 0.0f` (placeholder)
+   - **9 tests passing, 7 failing** due to missing distance computation
+   - **Next step**: Need to store prototype feature vectors in `CModelParams` OR maintain reference to training data
 5. **Phase 2.3: AccuracySystem** — compute metrics
    - Input: Predicted labels + `CLabel` components
    - Output: `CEvalMetrics` with accuracy values
