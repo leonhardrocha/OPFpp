@@ -21,6 +21,13 @@ struct CLabel : IComponent {
     explicit CLabel(int l) : label(l) {}
 };
 
+struct CTrueLabel : IComponent {
+    int label{-1};
+
+    CTrueLabel() = default;
+    explicit CTrueLabel(int l) : label(l) {}
+};
+
 struct CIOPath : IComponent {
     std::string path;
     

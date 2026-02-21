@@ -123,6 +123,11 @@ target_include_directories(test_ecs_train_system PRIVATE ${CMAKE_SOURCE_DIR}/inc
 target_link_libraries(test_ecs_train_system gtest gtest_main)
 add_test(NAME test_ecs_train_system COMMAND $<TARGET_FILE:test_ecs_train_system>)
 
+add_executable(test_ecs_accuracy_system tests_cpp/test_ecs_accuracy_system.cpp)
+target_include_directories(test_ecs_accuracy_system PRIVATE ${CMAKE_SOURCE_DIR}/include_cpp)
+target_link_libraries(test_ecs_accuracy_system gtest gtest_main)
+add_test(NAME test_ecs_accuracy_system COMMAND $<TARGET_FILE:test_ecs_accuracy_system>)
+
 # ECS ClassifySystem tests
 add_executable(test_ecs_classify_system tests_cpp/test_ecs_classify_system.cpp)
 target_include_directories(test_ecs_classify_system PRIVATE ${CMAKE_SOURCE_DIR}/include_cpp)
@@ -141,6 +146,7 @@ set_tests_properties(
     test_ecs_io_system
     test_ecs_train_system
     test_ecs_classify_system
+    test_ecs_accuracy_system
     PROPERTIES
     WORKING_DIRECTORY ${CMAKE_BINARY_DIR}
 )

@@ -213,9 +213,12 @@ for (auto id : results) {
     - ✅ Cost-based routing: `cost = max(pathval, distance)` + early termination
     - ✅ Updated tests to validate distance, ordering, and OPF cost function
     - ✅ **All 22 tests passing** (out/build/clang)
-5. **Phase 2.3: AccuracySystem** — compute metrics
-   - Input: Predicted labels + `CLabel` components
-   - Output: `CEvalMetrics` with accuracy values
+5. ✅ **Phase 2.3: AccuracySystem** — compute metrics (IMPLEMENTATION + TESTS COMPLETE)
+    - Input: Predicted labels (`CLabel`) + ground-truth labels (`CTrueLabel`)
+    - Output: `CEvalMetrics` with accuracy values, correct/total counts, status
+    - ✅ Supports both single-entity and subgraph (`CSamples`) evaluation
+    - ✅ Added `CTrueLabel` component for ground-truth labels
+    - ✅ Added tests in `test_ecs_accuracy_system.cpp`
 
 **Phase 3: Integration & Migration (higher effort, long-term)**
 6. **Create adapters** — wrap existing OPF API functions to use ECS internally
