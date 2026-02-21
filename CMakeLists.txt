@@ -103,6 +103,26 @@ add_executable(test_example6 tests_cpp/test_example6.cpp)
 target_link_libraries(test_example6 opf_core gtest gtest_main)
 add_test(NAME test_example6 COMMAND $<TARGET_FILE:test_example6>)
 
+add_executable(test_ecs_components tests_cpp/test_ecs_components.cpp)
+target_include_directories(test_ecs_components PRIVATE ${CMAKE_SOURCE_DIR}/include_cpp)
+target_link_libraries(test_ecs_components gtest gtest_main)
+add_test(NAME test_ecs_components COMMAND $<TARGET_FILE:test_ecs_components>)
+
+add_executable(test_ecs_split_system tests_cpp/test_ecs_split_system.cpp)
+target_include_directories(test_ecs_split_system PRIVATE ${CMAKE_SOURCE_DIR}/include_cpp)
+target_link_libraries(test_ecs_split_system gtest gtest_main)
+add_test(NAME test_ecs_split_system COMMAND $<TARGET_FILE:test_ecs_split_system>)
+
+add_executable(test_ecs_io_system tests_cpp/test_ecs_io_system.cpp)
+target_include_directories(test_ecs_io_system PRIVATE ${CMAKE_SOURCE_DIR}/include_cpp)
+target_link_libraries(test_ecs_io_system gtest gtest_main)
+add_test(NAME test_ecs_io_system COMMAND $<TARGET_FILE:test_ecs_io_system>)
+
+add_executable(test_ecs_train_system tests_cpp/test_ecs_train_system.cpp)
+target_include_directories(test_ecs_train_system PRIVATE ${CMAKE_SOURCE_DIR}/include_cpp)
+target_link_libraries(test_ecs_train_system gtest gtest_main)
+add_test(NAME test_ecs_train_system COMMAND $<TARGET_FILE:test_ecs_train_system>)
+
 set_tests_properties(
     test_example1
     test_example2
@@ -110,8 +130,15 @@ set_tests_properties(
     test_example4
     test_example5
     test_example6
+    test_ecs_components
+    test_ecs_split_system
+    test_ecs_io_system
+    test_ecs_train_system
     PROPERTIES
     WORKING_DIRECTORY ${CMAKE_BINARY_DIR}
 )
 
+# ECS example executable (header-only ECS runtime with example usage)
+add_executable(ecs_example src_cpp/ecs_example.cpp)
+target_include_directories(ecs_example PRIVATE ${CMAKE_SOURCE_DIR}/include_cpp)
 
