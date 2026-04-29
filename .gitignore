@@ -1,33 +1,7 @@
-<<<<<<< HEAD
-# Build artifacts
-build/
-*.exe
-*.dll
-*.so
-*.a
-*.out
 
-# CMake
-CMakeCache.txt
-CMakeFiles/
-cmake_install.cmake
-Makefile
-=======
-﻿# CMake
-CMakeCache.txt
-CMakeFiles/
-CMakeScripts/
-cmake_install.cmake
-CTestTestfile.cmake
-Makefile
-Testing/
-build/
-cmake-build-*/
-_build/
-install/
-bin/
-lib/
-*.dir
+# VsCode local settings (add using README GNU CMake.md)
+.vscode/
+
 
 # Build artifacts
 *.o
@@ -93,4 +67,41 @@ coverage.*
 *.swp
 .DS_Store
 Thumbs.db
->>>>>>> f6757cce94cf63d30d1ae1407e2596e9cd29a24a
+
+
+# CMake
+# CMake
+CMakeCache.txt
+CMakeFiles/
+CMakeScripts/
+cmake_install.cmake
+CTestTestfile.cmake
+Makefile
+Testing/
+build/
+cmake-build-*/
+_build/
+install/
+bin/
+lib/
+*.dir
+
+# ---
+# Line endings: CRLF/LF handling
+#
+# To ensure consistent line endings across Windows (CRLF) and Linux/macOS (LF),
+# use a .gitattributes file in your repository root with the following content:
+#
+#   * text=auto
+#
+# This will make Git handle line endings automatically for all text files.
+#
+# You do NOT need to ignore files based on line endings in .gitignore.
+#
+# If you have files that must always use LF or CRLF, specify them in .gitattributes.
+#
+# Example .gitattributes:
+#   *.sh text eol=lf
+#   *.bat text eol=crlf
+#
+# See: https://git-scm.com/docs/gitattributes#_end_of_line_conversion
