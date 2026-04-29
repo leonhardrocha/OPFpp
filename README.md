@@ -117,6 +117,8 @@ For implementation details, see [conversion_plan.md](conversion_plan.md).
 
 ## How to Build
 
+Use the instructions in [README_GNU_CMake.md](README_GNU_CMake.md) to install GNU tools using CMake. Other C++ kits (MSVC//CLANG) can be used on your discretion.
+
 ### Prerequisites
 
 - **A C++ compiler** supporting C++20 (GCC 11+, Clang 13+, or MSVC 2019+)
