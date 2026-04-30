@@ -16,7 +16,11 @@
                 "CMAKE_TOOLCHAIN_FILE": "",
                 "CMAKE_EXE_LINKER_FLAGS": "-g",
                 "CMAKE_C_COMPILER": "d:/msys64/ucrt64/bin/gcc.exe",
-                "CMAKE_CXX_COMPILER": "d:/msys64/ucrt64/bin/g++.exe"
+                "CMAKE_CXX_COMPILER": "d:/msys64/ucrt64/bin/g++.exe",
+                "Python_ROOT_DIR": "${sourceDir}/pythonlib/.venv",
+                "Python_EXECUTABLE": "${sourceDir}/pythonlib/.venv/Scripts/python.exe",
+                "Python_INCLUDE_DIR": "C:/Users/leonardo_rocha/AppData/Roaming/uv/python/cpython-3.14-windows-x86_64-none/Include",
+                "Python_LIBRARY": "C:/Users/leonardo_rocha/AppData/Roaming/uv/python/cpython-3.14-windows-x86_64-none/libs/python314.lib"
             }
         },
         {
@@ -31,6 +35,79 @@
                 "CMAKE_CXX_FLAGS": "/Zi /Od",
                 "CMAKE_INSTALL_PREFIX": "${sourceDir}/install/msvc",
                 "CMAKE_TOOLCHAIN_FILE": "",
+                "CMAKE_EXE_LINKER_FLAGS": "/DEBUG",
+                "CMAKE_SHARED_LINKER_FLAGS": "/DEBUG",
+                "CMAKE_EXPORT_COMPILE_COMMANDS": "YES",
+                "CMAKE_C_COMPILER": "cl.exe",
+                "CMAKE_CXX_COMPILER": "cl.exe"
+            }
+        },
+        {
+            "name": "conan-release",
+            "displayName": "Release (with Conan dependencies)",
+            "description": "Configure with Conan dependencies and Release build.",
+            "generator": "Ninja",
+            "binaryDir": "${sourceDir}/build/release",
+            "cacheVariables": {
+                "CMAKE_BUILD_TYPE": "Release",
+                "CMAKE_TOOLCHAIN_FILE": "${sourceDir}/build/conan_toolchain.cmake"
+            }         
+        },
+        {
+            "name": "conan-debug",
+            "displayName": "Debug (with Conan dependencies)",
+            "description": "Configure with Conan dependencies and Debug build.",
+            "generator": "Ninja",
+            "binaryDir": "${sourceDir}/build/debug",
+            "cacheVariables": {
+                "CMAKE_BUILD_TYPE": "Debug",
+                "CMAKE_TOOLCHAIN_FILE": "${sourceDir}/build/conan_toolchain.cmake"
+            }         
+        },
+        {
+            "name": "Custom configure preset",
+            "displayName": "Custom configure preset",
+            "description": "Sets Ninja generator, build and install directory",
+            "generator": "Ninja",
+            "binaryDir": "${sourceDir}/out/build/${presetName}",
+            "cacheVariables": {
+                "CMAKE_BUILD_TYPE": "Debug",
+                "CMAKE_TOOLCHAIN_FILE": "${sourceDir}/build/conan_toolchain.cmake"
+            }
+        }
+        ,
+        {
+            "name": "gcc-conan",
+            "displayName": "GCC (with Conan dependencies)",
+            "description": "Use GCC toolchain with Conan-generated toolchain file. Run 'conan install .' first.",
+            "generator": "Ninja",
+            "binaryDir": "${sourceDir}/build/gcc",
+            "hidden": false,
+            "cacheVariables": {
+                "CMAKE_BUILD_TYPE": "Debug",
+                "CMAKE_C_FLAGS": "-g",
+                "CMAKE_CXX_FLAGS": "-g",
+                "CMAKE_INSTALL_PREFIX": "${sourceDir}/install/gcc",
+                "CMAKE_TOOLCHAIN_FILE": "${sourceDir}/build/gcc/conan_toolchain.cmake",
+                "CMAKE_EXE_LINKER_FLAGS": "-g",
+                "CMAKE_C_COMPILER": "d:/msys64/ucrt64/bin/gcc.exe",
+                "CMAKE_CXX_COMPILER": "d:/msys64/ucrt64/bin/g++.exe",
+                "Python_ROOT_DIR": "${sourceDir}/pythonlib/.venv",
+                "Python_EXECUTABLE": "${sourceDir}/pythonlib/.venv/Scripts/python.exe"
+            }
+        },
+        {
+            "name": "msvc-conan",
+            "displayName": "MSVC (with Conan dependencies)",
+            "description": "Use MSVC toolchain with Conan-generated toolchain file. Run 'conan install .' first.",
+            "generator": "Ninja",
+            "binaryDir": "${sourceDir}/build/msvc",
+            "cacheVariables": {
+                "CMAKE_BUILD_TYPE": "Debug",
+                "CMAKE_C_FLAGS": "/Zi /Od",
+                "CMAKE_CXX_FLAGS": "/Zi /Od",
+                "CMAKE_INSTALL_PREFIX": "${sourceDir}/install/msvc",
+                "CMAKE_TOOLCHAIN_FILE": "${sourceDir}/build/msvc/conan_toolchain.cmake",
                 "CMAKE_EXE_LINKER_FLAGS": "/DEBUG",
                 "CMAKE_SHARED_LINKER_FLAGS": "/DEBUG",
                 "CMAKE_EXPORT_COMPILE_COMMANDS": "YES",

@@ -1,7 +1,11 @@
+# Local build automation script
+build_opfpy.sh
 
 # VsCode local settings (add using README GNU CMake.md)
 .vscode/
 
+# conan submodule (if used)
+./conan_src/
 
 # Build artifacts
 *.o

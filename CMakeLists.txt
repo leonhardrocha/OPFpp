@@ -1,8 +1,57 @@
+
+# Ensure uv and conan are installed (cross-platform)
+include(cmake/FindOrInstallUV.cmake)
+
+
+# --- Conan auto-install logic ---
+set(CONAN_TOOLCHAIN_PATH "${CMAKE_BINARY_DIR}/conan_toolchain.cmake")
+if(NOT EXISTS "${CONAN_TOOLCHAIN_PATH}")
+    message(STATUS "Conan toolchain not found. Running Conan to install dependencies...")
+    # Get Python include path using sysconfig
+    execute_process(
+        COMMAND ${Python_EXECUTABLE} -c "import sysconfig; print(sysconfig.get_path('include'))"
+        OUTPUT_VARIABLE PYTHON_INCLUDE_DIR
+        OUTPUT_STRIP_TRAILING_WHITESPACE
+    )
+    set(ENV{PYTHON_INCLUDE_DIR} "${PYTHON_INCLUDE_DIR}")
+    message(STATUS "PYTHON_INCLUDE_DIR set to: $ENV{PYTHON_INCLUDE_DIR}")
+    execute_process(
+        COMMAND ${CMAKE_COMMAND} -E env
+            PYTHON_INCLUDE_DIR=${PYTHON_INCLUDE_DIR}
+            conan install "${CMAKE_SOURCE_DIR}" -pr:b=default -pr:h=default -s build_type=Debug --output-folder="${CMAKE_BINARY_DIR}" --build=missing
+        WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}"
+        RESULT_VARIABLE _conan_result
+    )
+    if(NOT _conan_result EQUAL 0)
+        message(FATAL_ERROR "Conan install failed. Please check your Conan setup.")
+    endif()
+endif()
+
+# Conan/pybind11 integration
+include(${CONAN_TOOLCHAIN_PATH} OPTIONAL)
+
+
+# Explicitly set Python include and library paths for pybind11 (legacy FindPythonLibs compatibility)
+set(Python_INCLUDE_DIR "C:/Users/leonardo_rocha/AppData/Roaming/uv/python/cpython-3.14-windows-x86_64-none/Include")
+set(Python_LIBRARY "C:/Users/leonardo_rocha/AppData/Roaming/uv/python/cpython-3.14-windows-x86_64-none/libs/python314.lib")
+
+# Find pybind11 (from Conan)
+find_package(pybind11 REQUIRED)
+
+# Example: Minimal Python extension module (to be expanded)
+add_library(opfpy MODULE src_cpp/pybind_stub.cpp)
+target_link_libraries(opfpy PRIVATE opf_core pybind11::module)
+set_target_properties(opfpy PROPERTIES PREFIX "" SUFFIX ".pyd")
+install(TARGETS opfpy DESTINATION tools/3rdparty)
 cmake_minimum_required(VERSION 3.16)
 project(LibOPF_CPP CXX)
 
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
+
+# Força o CMake a priorizar o Python do ambiente virtual ativo
+set(Python_FIND_STRATEGY LOCATION)
+set(Python_FIND_REGISTRY LAST)
 
 # Add GoogleTest
 include(FetchContent)

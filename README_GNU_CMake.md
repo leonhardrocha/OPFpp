@@ -102,7 +102,8 @@ In the VS Code status bar, click on the CMake Kit selection (e.g., "No Kit Selec
 
 ## 6. VsCode CMake/Ninja Local Settings Examples
 
-### settings.json
+**In `.vscode/settings.json`:**
+
 ```json
 {
     "cmake.buildDirectory": "${workspaceFolder}/build/${kitName}/${buildType}",
@@ -135,9 +136,9 @@ In the VS Code status bar, click on the CMake Kit selection (e.g., "No Kit Selec
 }
 ```
 
-### c_cpp_properties.json
-```json .vscode\c_cpp_properties.json
+**In `.vscode/c_cpp_properties.json.json`**:
 
+```json
 {
     "configurations": [
         {
@@ -181,8 +182,9 @@ In the VS Code status bar, click on the CMake Kit selection (e.g., "No Kit Selec
 }
 ```
 
-### launch.json
-```json .vscode\launch.json
+**In `.vscode/launch.json`**:
+
+```json
 {
     "version": "2.0.0",
     "configurations": [
@@ -213,4 +215,75 @@ In the VS Code status bar, click on the CMake Kit selection (e.g., "No Kit Selec
 ---
 
 You are now ready to configure and build your CMake project with the GNU toolchain on Windows (MSYS2) or Linux!
+
+---
+
+## 8. Integrating Python and pybind11 (Conan/MSYS2/VS Code)
+
+When building Python extensions with **pybind11** (installed via Conan) and CMake using the **GNU toolchain (MSYS2/UCRT64)**, you may encounter issues if your Python is the official Windows version (e.g., installed via `uv` or python.org) rather than MSYS2's Python. This is because:
+
+- Official Windows Python uses `.lib` files (MSVC format), while GCC (MinGW/UCRT64) expects `.a` or `.dll.a` libraries.
+- Conan/pybind11's `FindPythonLibsNew.cmake` may fail to detect the correct Python library or reject the `.lib` file when using GCC.
+
+### Step 1: Discover the Correct Python Paths
+
+Open the **UCRT64** terminal in VS Code and run:
+
+```bash
+# Enter your venv directory
+cd D:/src/3gs-mask-studio/OPFpp/pythonlib/
+
+# Activate the venv (important for 'which' to work)
+source .venv/Scripts/activate
+
+# Capture the variables
+PYTHON_BASE=$(python -c "import sys; print(sys.base_prefix.replace('\\\\', '/'))")
+PYTHON_VER=$(python -c "import sys; print(f'{sys.version_info.major}{sys.version_info.minor}')")
+PYTHON_EXE=$(which python)
+```
+
+### Step 2: Configure CMake Manually (with Conan Toolchain)
+
+Run the following command in the same UCRT64 terminal. Note the explicit `-DPYTHON_LIBRARY` and `-DPYTHON_INCLUDE_DIR`:
+
+```bash
+D:/msys64/ucrt64/bin/cmake.exe \
+    -G Ninja \
+    -DCMAKE_BUILD_TYPE=Debug \
+    -DCMAKE_TOOLCHAIN_FILE=D:/src/3gs-mask-studio/OPFpp/build/gcc/conan_toolchain.cmake \
+    -DCMAKE_C_COMPILER=d:/msys64/ucrt64/bin/gcc.exe \
+    -DCMAKE_CXX_COMPILER=d:/msys64/ucrt64/bin/g++.exe \
+    -DPYTHON_EXECUTABLE="$PYTHON_EXE" \
+    -DPYTHON_INCLUDE_DIR="$PYTHON_BASE/include" \
+    -DPYTHON_LIBRARY="$PYTHON_BASE/libs/python$PYTHON_VER.lib" \
+    -S D:/src/3gs-mask-studio/OPFpp \
+    -B D:/src/3gs-mask-studio/OPFpp/build/gcc
+```
+
+### Step 3: Integrate with VS Code (CMake Presets / Settings)
+
+To make the VS Code "Configure" button work, add these variables to your `settings.json` or `CMakePresets.json`:
+
+**In `.vscode/settings.json`:**
+
+```json
+"cmake.configureSettings": {
+        "PYTHON_EXECUTABLE": "D:/src/3gs-mask-studio/OPFpp/pythonlib/.venv/Scripts/python.exe",
+        "PYTHON_INCLUDE_DIR": "C:/Users/leonardo_rocha/AppData/Local/Programs/Python/Python312/include",
+        "PYTHON_LIBRARY": "C:/Users/leonardo_rocha/AppData/Local/Programs/Python/Python312/libs/python312.lib"
+}
+```
+*Make sure the `C:/Users/.../Python312` path matches your `$PYTHON_BASE` from Step 1.*
+
+---
+
+#### Why does "Python libraries not found" persist?
+
+The `FindPythonLibsNew.cmake` script from Conan/pybind11 expects the library in `PYTHON_PREFIX/libs`. If your `PYTHON_PREFIX` is set to a `.venv` (e.g., created by `uv`), that folder **does not** contain a `libs` directory, so detection fails. By passing `PYTHON_LIBRARY` pointing to the real Python install (outside the venv), you bypass this broken check.
+
+**Extra Tip:** If you get linker errors (e.g., "redefined symbols") after finding the library, you may need to install Python from MSYS2 (`pacman -S mingw-w64-ucrt-x86_64-python`). Try the above solution first to keep using your `uv` venv.
+
+---
+
+You are now ready to configure and build your CMake project with the GNU toolchain on Windows (MSYS2) or Linux, including Python/pybind11 integration!
 
