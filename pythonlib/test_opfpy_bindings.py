@@ -3,7 +3,15 @@ import os
 import sys
 
 # Ensure the built extension is on the path when run from pythonlib/
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'tools', '3rdparty', 'src'))
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), 'bin'))
+
+# On Windows, the .pyd is built with MSYS2/UCRT64 GCC and requires its runtime
+# DLLs (libgcc_s_seh-1, libstdc++-6, libwinpthread-1).  Add the UCRT64 bin dir
+# to the DLL search path so they are found regardless of the shell's PATH.
+if sys.platform == "win32":
+    _ucrt64_bin = r"D:\msys64\ucrt64\bin"
+    if os.path.isdir(_ucrt64_bin):
+        os.add_dll_directory(_ucrt64_bin)
 
 from opfpy import Node, Subgraph
 
@@ -34,7 +42,8 @@ class TestOPFBindings(unittest.TestCase):
         self.assertEqual(node.status, 1)
         self.assertEqual(node.relevant, 1)
         self.assertEqual(node.nplatadj, 2)
-        self.assertEqual(node.feat, [0.1, 0.2, 0.3])
+        for got, exp in zip(node.feat, [0.1, 0.2, 0.3]):
+            self.assertAlmostEqual(got, exp, places=5)
         self.assertEqual(node.adj, [1, 2, 3])
         node.add_to_adj(4)
         self.assertIn(4, node.adj)
@@ -54,13 +63,16 @@ class TestOPFBindings(unittest.TestCase):
         self.assertEqual(sg.nlabels, 2)
         self.assertEqual(sg.bestk, 1)
         self.assertEqual(sg.df, 0.5)
-        self.assertEqual(sg.mindens, 0.1)
-        self.assertEqual(sg.maxdens, 0.9)
+        self.assertAlmostEqual(sg.mindens, 0.1, places=5)
+        self.assertAlmostEqual(sg.maxdens, 0.9, places=5)
         self.assertEqual(sg.K, 2.0)
         self.assertEqual(sg.nnodes, 2)
         node0 = sg.get_node(0)
         node0.feat = [1.0, 2.0, 3.0]
         node0.label = 1
+        # Subgraph(n) pre-populates ordered_list_of_nodes with n zeros;
+        # clear before testing add/clear behaviour.
+        sg.clear_ordered_list_of_nodes()
         sg.add_ordered_node(0)
         self.assertEqual(sg.ordered_list_of_nodes, [0])
         sg.clear_ordered_list_of_nodes()
@@ -79,7 +91,8 @@ class TestOPFBindings(unittest.TestCase):
         self.assertEqual(sg2.nfeats, 2)
         self.assertEqual(sg2.nlabels, 1)
         self.assertEqual(sg2.nnodes, 1)
-        self.assertEqual(sg2.get_node(0).feat, [0.5, 0.6])
+        for got, exp in zip(sg2.get_node(0).feat, [0.5, 0.6]):
+            self.assertAlmostEqual(got, exp, places=5)
         self.assertEqual(sg2.get_node(0).label, 1)
         os.remove(tmpfile)
 

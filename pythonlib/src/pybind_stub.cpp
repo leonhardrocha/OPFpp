@@ -4,9 +4,9 @@
 #include <memory>
 #include <vector>
 #include <string>
-#include "../include_cpp/opf/Node.hpp"
-#include "../include_cpp/opf/Subgraph.hpp"
-#include "../include_cpp/opf/file.hpp"
+#include "../include/opf/Node.hpp"
+#include "../include/opf/Subgraph.hpp"
+#include "../include/opf/file.hpp"
 
 namespace py = pybind11;
 using opf::Node;

@@ -20,8 +20,15 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
 set(OPF_3RDPARTY_SRC_DIR "${CMAKE_SOURCE_DIR}/tools/3rdparty/src")
 set(OPF_3RDPARTY_BIN_DIR "${CMAKE_SOURCE_DIR}/tools/3rdparty/bin")
-file(MAKE_DIRECTORY "${OPF_3RDPARTY_SRC_DIR}")
-file(MAKE_DIRECTORY "${OPF_3RDPARTY_BIN_DIR}")
+set(OPFPY_SRC_DIR     "${CMAKE_SOURCE_DIR}/pythonlib/src")
+set(OPFPY_INCLUDE_DIR "${CMAKE_SOURCE_DIR}/pythonlib/include")
+set(OPFPY_BIN_DIR     "${CMAKE_SOURCE_DIR}/pythonlib/bin")
+set(OPFPY_LIB_DIR     "${CMAKE_SOURCE_DIR}/pythonlib/lib")
+foreach(_d ${OPF_3RDPARTY_SRC_DIR} ${OPF_3RDPARTY_BIN_DIR}
+           ${OPFPY_SRC_DIR} ${OPFPY_INCLUDE_DIR}
+           ${OPFPY_BIN_DIR} ${OPFPY_LIB_DIR})
+    file(MAKE_DIRECTORY "${_d}")
+endforeach()
 
 set(Python_FIND_STRATEGY LOCATION)
 set(Python_FIND_VIRTUALENV FIRST)
@@ -60,11 +67,12 @@ find_package(pybind11 REQUIRED)
 
 
 add_library(opfpy MODULE
-    src_cpp/pybind_stub.cpp
+    ${OPFPY_SRC_DIR}/pybind_stub.cpp
     src_cpp/file.cpp
 )
 
 target_include_directories(opfpy PRIVATE
+    "${OPFPY_INCLUDE_DIR}"
     "${CMAKE_SOURCE_DIR}/include_cpp"
 )
 
@@ -74,9 +82,9 @@ target_link_libraries(opfpy PRIVATE
 
 set_target_properties(opfpy PROPERTIES
     PREFIX ""
-    LIBRARY_OUTPUT_DIRECTORY "${OPF_3RDPARTY_SRC_DIR}"
-    RUNTIME_OUTPUT_DIRECTORY "${OPF_3RDPARTY_SRC_DIR}"
-    ARCHIVE_OUTPUT_DIRECTORY "${OPF_3RDPARTY_BIN_DIR}"
+    LIBRARY_OUTPUT_DIRECTORY "${OPFPY_BIN_DIR}"
+    RUNTIME_OUTPUT_DIRECTORY "${OPFPY_BIN_DIR}"
+    ARCHIVE_OUTPUT_DIRECTORY "${OPFPY_LIB_DIR}"
 )
 
 if(WIN32)
@@ -88,7 +96,7 @@ if(NOT OPF_PYBIND11_INCLUDE_DIRS)
     get_target_property(OPF_PYBIND11_INCLUDE_DIRS pybind11::pybind11 INTERFACE_INCLUDE_DIRECTORIES)
 endif()
 
-set(OPF_DEPS_FILE "${OPF_3RDPARTY_BIN_DIR}/opfpy_cython_deps.txt")
+set(OPF_DEPS_FILE "${OPFPY_BIN_DIR}/opfpy_cython_deps.txt")
 add_custom_command(TARGET opfpy POST_BUILD
     COMMAND ${CMAKE_COMMAND}
         -DOUTPUT_FILE=${OPF_DEPS_FILE}
