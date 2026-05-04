@@ -105,13 +105,19 @@ This plan outlines the phased development of a Python library for OPF workflows,
 - [x] Expose data structures to Python via pybind11 (expand pybind_stub.cpp)
 - [x] Build `opfpy` from `pythonlib/src/pybind_stub.cpp` and output module artifacts to `pythonlib/bin`
 - [x] Generate Cython dependency manifest in `pythonlib/bin/opfpy_cython_deps.txt`
-- [ ] Add dedicated `.pyx/.pxd` wrappers (optional Cython-facing layer) on top of `opfpy`
-- [ ] Integrate Cython-facing wrappers into `pythonlib` packaging and tests
+- [x] Add dedicated `.pyx/.pxd` wrappers (optional Cython-facing layer) on top of `opfpy`
+  - `pythonlib/src/opfpy_cython.pxd` — cdef class declarations (`Node`, `Subgraph`) for `cimport`
+  - `pythonlib/src/opfpy_cython.pyx` — full Cython wrapper with typed properties, model I/O, and free functions
+- [x] Integrate Cython-facing wrappers into `pythonlib` packaging and tests
+  - CMakeLists.txt transpiles `.pyx` → `.cpp` via `cython --cplus -3`, then compiles to `pythonlib/bin/opfpy_cython.pyd`
+  - `pythonlib/test_opfpy_cython.py` — 12 tests covering Node/Subgraph wrappers, model I/O, original-file loading, roundtrip read/write, and free functions
 - [x] Implement OPF binary dataset file reader/writer in C++ and expose to Python
 - [x] Unit tests for data structures and file I/O (Python tests must use opfpy)
-- [ ] **Test Results:**
-  - `python -m unittest test_opfpy_bindings -v` passes for 7 tests covering Node/Subgraph bindings, model I/O, original-file loading, roundtrip read/write, file creation, and missing-file error handling.
-- [ ] **Validation Requirements:**
+- [x] **Test Results:**
+  - `python -m unittest test_opfpy_bindings -v` — **7 tests, OK** (Node/Subgraph bindings, model I/O, original-file loading, roundtrip read/write, file creation, missing-file error handling)
+  - `python -m unittest test_opfpy_cython -v` — **12 tests, OK** (Cython Node/Subgraph wrappers, `_raw` access, model I/O roundtrip, original-file loading, free-function read/write with both `opfpy.Subgraph` and `cy.Subgraph`)
+  - Combined: `python -m unittest test_opfpy_bindings test_opfpy_cython -v` — **19 tests, OK**
+- [x] **Validation Requirements:**
   - [x] Can load and save OPF datasets without data loss (C++/Python roundtrip)
   - [x] Data structures match expected fields and types (Python matches C++ reference)
 

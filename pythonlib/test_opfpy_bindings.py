@@ -5,13 +5,17 @@ import sys
 # Ensure the built extension is on the path when run from pythonlib/
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), 'bin'))
 
-# On Windows, the .pyd is built with MSYS2/UCRT64 GCC and requires its runtime
-# DLLs (libgcc_s_seh-1, libstdc++-6, libwinpthread-1).  Add the UCRT64 bin dir
-# to the DLL search path so they are found regardless of the shell's PATH.
+# On Windows, the .pyd is built with MSYS2/UCRT64 GCC and requires runtime DLLs.
+# Runtime folders are configured through VS Code settings using:
+# UCRT64_RUNTIME_FOLDER and UCRT64_RUNTIME_LIB_FOLDER.
 if sys.platform == "win32":
-    _ucrt64_bin = r"D:\msys64\ucrt64\bin"
-    if os.path.isdir(_ucrt64_bin):
-        os.add_dll_directory(_ucrt64_bin)
+    _runtime_dirs = [
+        os.environ.get("UCRT64_RUNTIME_FOLDER", r"D:\msys64\ucrt64\bin"),
+        os.environ.get("UCRT64_RUNTIME_LIB_FOLDER", r"D:\msys64\ucrt64\lib"),
+    ]
+    for _runtime_dir in _runtime_dirs:
+        if _runtime_dir and os.path.isdir(_runtime_dir):
+            os.add_dll_directory(_runtime_dir)
 
 from opfpy import Node, Subgraph
 

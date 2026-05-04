@@ -104,3 +104,62 @@ add_custom_command(TARGET opfpy POST_BUILD
         -DPYBIND11_INCLUDE_DIRS=${OPF_PYBIND11_INCLUDE_DIRS}
         -P ${CMAKE_SOURCE_DIR}/cmake/WriteCythonDeps.cmake
 )
+
+# ---------------------------------------------------------------------------
+# Cython wrapper: opfpy_cython
+# ---------------------------------------------------------------------------
+# Step 1: transpile .pyx -> .cpp using cython --cplus
+set(CYTHON_PYX "${OPFPY_SRC_DIR}/opfpy_cython.pyx")
+set(CYTHON_CPP "${CMAKE_BINARY_DIR}/opfpy_cython.cpp")
+
+find_program(CYTHON_EXECUTABLE NAMES cython3 cython HINTS
+    "${Python_EXECUTABLE}/../.."
+    "$ENV{VIRTUAL_ENV}/Scripts"
+    "$ENV{VIRTUAL_ENV}/bin"
+    NO_DEFAULT_PATH
+)
+if(NOT CYTHON_EXECUTABLE)
+    # Fallback: derive from Python interpreter path
+    get_filename_component(_py_bin "${Python_EXECUTABLE}" DIRECTORY)
+    find_program(CYTHON_EXECUTABLE NAMES cython3 cython
+        HINTS "${_py_bin}" NO_DEFAULT_PATH)
+endif()
+if(NOT CYTHON_EXECUTABLE)
+    message(FATAL_ERROR "Cython executable not found. Install it with: uv pip install cython")
+endif()
+message(STATUS "Cython found: ${CYTHON_EXECUTABLE}")
+
+add_custom_command(
+    OUTPUT  "${CYTHON_CPP}"
+    COMMAND "${CYTHON_EXECUTABLE}" --cplus -3
+            "${CYTHON_PYX}"
+            -o "${CYTHON_CPP}"
+    DEPENDS "${CYTHON_PYX}" "${OPFPY_SRC_DIR}/opfpy_cython.pxd"
+    COMMENT "Transpiling opfpy_cython.pyx -> opfpy_cython.cpp"
+)
+
+# Step 2: compile the generated C++ into a Python extension
+add_library(opfpy_cython MODULE "${CYTHON_CPP}")
+
+target_include_directories(opfpy_cython PRIVATE
+    "${Python_INCLUDE_DIRS}"
+    "${OPF_PYBIND11_INCLUDE_DIRS}"
+)
+
+target_link_libraries(opfpy_cython PRIVATE
+    pybind11::module
+)
+
+set_target_properties(opfpy_cython PROPERTIES
+    PREFIX ""
+    LIBRARY_OUTPUT_DIRECTORY "${OPFPY_BIN_DIR}"
+    RUNTIME_OUTPUT_DIRECTORY "${OPFPY_BIN_DIR}"
+    ARCHIVE_OUTPUT_DIRECTORY "${OPFPY_LIB_DIR}"
+)
+
+if(WIN32)
+    set_target_properties(opfpy_cython PROPERTIES SUFFIX ".pyd")
+endif()
+
+# opfpy_cython depends on opfpy being built first (runtime import)
+add_dependencies(opfpy_cython opfpy)
