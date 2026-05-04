@@ -99,10 +99,14 @@ This plan outlines the phased development of a Python library for OPF workflows,
 ## Phase 1: Data Structures & File I/O (C++ backend)
 - [x] Implement core data structures (`Node`, `Subgraph`) in C++ (see include_cpp/opf/Node.hpp, Subgraph.hpp)
 - [x] Expose data structures to Python via pybind11 (expand pybind_stub.cpp)
-- [x] Implement OPF binary dataset file reader/writer in C++ and expose to Python
-- [x] Unit tests for data structures and file I/O (Python tests must use opfpy)
-- [x] **Test Results:**
-  - All unit tests passed successfully (see test_data.py output, using opfpy)
+- [x] Build `opfpy` from `src_cpp/pybind_stub.cpp` and output module artifacts to `tools/3rdparty/src`
+- [x] Generate Cython dependency manifest in `tools/3rdparty/bin/opfpy_cython_deps.txt`
+- [ ] Add dedicated `.pyx/.pxd` wrappers (optional Cython-facing layer) on top of `opfpy`
+- [ ] Integrate Cython-facing wrappers into `pythonlib` packaging and tests
+- [ ] Implement OPF binary dataset file reader/writer in C++ and expose to Python
+- [ ] Unit tests for data structures and file I/O (Python tests must use opfpy)
+- [ ] **Test Results:**
+  - Pending re-run after CMake output path migration (`tools/3rdparty/src`) and dependency manifest generation (`tools/3rdparty/bin`)
 - [ ] **Validation Requirements:**
   - [ ] Can load and save OPF datasets without data loss (C++/Python roundtrip)
   - [ ] Data structures match expected fields and types (Python matches C++ reference)
@@ -111,11 +115,11 @@ This plan outlines the phased development of a Python library for OPF workflows,
 
 
 ## Phase 2: Distance Computation (C++ backend)
-- [x] Implement distance functions (Euclidean, Chi-Square, etc.) in C++
-- [x] Expose distance functions to Python via pybind11
-- [x] Implement distance matrix computation in C++ and expose to Python
-- [x] Unit tests for distance functions and matrix (Python tests must use opfpy)
-- [x] **Test Results:**
+- [ ] Implement distance functions (Euclidean, Chi-Square, etc.) in C++
+- [ ] Expose distance functions to Python via pybind11
+- [ ] Implement distance matrix computation in C++ and expose to Python
+- [ ] Unit tests for distance functions and matrix (Python tests must use opfpy)
+- [ ] **Test Results:**
 - [ ] **Validation Requirements:**
   - [ ] Distances match C++ implementation for sample data (Python vs C++)
   - [ ] Handles edge cases (identical points, empty sets)
