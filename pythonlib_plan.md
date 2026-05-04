@@ -9,7 +9,7 @@
   - All dependencies are installed (see README_GNU_CMake.md for platform-specific setup)
 - If the Python extension (opfpy) cannot be imported:
   - Ensure you are using the correct Python version and the .venv is activated
-  - Add the build output directory (../tools/3rdparty) to your PYTHONPATH or sys.path
+  - Add the build output directory (`pythonlib/bin`) to your PYTHONPATH or sys.path
   - Rebuild the extension after any changes to C++ or pybind11 code
 - For more details, see [build_opfpy.md](pythonlib/build_opfpy.md) and the main project README.
 
@@ -25,11 +25,15 @@ pythonlib/
   .venv/                # Virtual environment (created with uv)
   pyproject.toml        # Project metadata
   README.md
+  src/
+    pybind_stub.cpp     # pybind11 binding source
+  include/
+    opf/                # forwarding headers for the Python-facing build layout
+  bin/
+    opfpy.*             # Built Python extension module (from C++/pybind11)
+    opfpy_cython_deps.txt
+  lib/                  # Archive/import-library output for the extension target
   (Python test and helper scripts)
-tools/3rdparty/
-  opfpy.*               # Built Python extension module (from C++/pybind11)
-src_cpp/
-  pybind_stub.cpp       # pybind11 binding source (expand for full OPF API)
 include_cpp/opf/         # C++ headers for OPF core
 ```
 
@@ -64,7 +68,7 @@ include_cpp/opf/         # C++ headers for OPF core
     ```sh
     bash ./build_opfpy.sh
     ```
-  - This script will activate the venv, run Conan, configure CMake, build the extension, and copy it to tools/3rdparty.
+  - This script will activate the venv, run Conan, configure CMake, build the extension into `pythonlib/bin`, and write the Cython dependency manifest to `pythonlib/bin/opfpy_cython_deps.txt`.
   - See [build_opfpy.md](pythonlib/build_opfpy.md) for manual step-by-step details if needed.
 
 
@@ -73,7 +77,7 @@ include_cpp/opf/         # C++ headers for OPF core
   - Example:
     ```sh
     cd pythonlib
-    python -c "import sys; sys.path.insert(0, '../tools/3rdparty'); import opfpy; print(opfpy.hello())"
+    python -c "import sys; sys.path.insert(0, './bin'); import opfpy; print(opfpy.hello())"
     ```
 
 6. **Run Python tests (must use the C++ backend):**
@@ -99,17 +103,17 @@ This plan outlines the phased development of a Python library for OPF workflows,
 ## Phase 1: Data Structures & File I/O (C++ backend)
 - [x] Implement core data structures (`Node`, `Subgraph`) in C++ (see include_cpp/opf/Node.hpp, Subgraph.hpp)
 - [x] Expose data structures to Python via pybind11 (expand pybind_stub.cpp)
-- [x] Build `opfpy` from `src_cpp/pybind_stub.cpp` and output module artifacts to `tools/3rdparty/src`
-- [x] Generate Cython dependency manifest in `tools/3rdparty/bin/opfpy_cython_deps.txt`
+- [x] Build `opfpy` from `pythonlib/src/pybind_stub.cpp` and output module artifacts to `pythonlib/bin`
+- [x] Generate Cython dependency manifest in `pythonlib/bin/opfpy_cython_deps.txt`
 - [ ] Add dedicated `.pyx/.pxd` wrappers (optional Cython-facing layer) on top of `opfpy`
 - [ ] Integrate Cython-facing wrappers into `pythonlib` packaging and tests
-- [ ] Implement OPF binary dataset file reader/writer in C++ and expose to Python
-- [ ] Unit tests for data structures and file I/O (Python tests must use opfpy)
+- [x] Implement OPF binary dataset file reader/writer in C++ and expose to Python
+- [x] Unit tests for data structures and file I/O (Python tests must use opfpy)
 - [ ] **Test Results:**
-  - Pending re-run after CMake output path migration (`tools/3rdparty/src`) and dependency manifest generation (`tools/3rdparty/bin`)
+  - `python -m unittest test_opfpy_bindings -v` passes for 7 tests covering Node/Subgraph bindings, model I/O, original-file loading, roundtrip read/write, file creation, and missing-file error handling.
 - [ ] **Validation Requirements:**
-  - [ ] Can load and save OPF datasets without data loss (C++/Python roundtrip)
-  - [ ] Data structures match expected fields and types (Python matches C++ reference)
+  - [x] Can load and save OPF datasets without data loss (C++/Python roundtrip)
+  - [x] Data structures match expected fields and types (Python matches C++ reference)
 
 ---
 

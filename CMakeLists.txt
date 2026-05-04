@@ -18,14 +18,11 @@ project(LibOPF_CPP CXX)
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
-set(OPF_3RDPARTY_SRC_DIR "${CMAKE_SOURCE_DIR}/tools/3rdparty/src")
-set(OPF_3RDPARTY_BIN_DIR "${CMAKE_SOURCE_DIR}/tools/3rdparty/bin")
 set(OPFPY_SRC_DIR     "${CMAKE_SOURCE_DIR}/pythonlib/src")
 set(OPFPY_INCLUDE_DIR "${CMAKE_SOURCE_DIR}/pythonlib/include")
 set(OPFPY_BIN_DIR     "${CMAKE_SOURCE_DIR}/pythonlib/bin")
 set(OPFPY_LIB_DIR     "${CMAKE_SOURCE_DIR}/pythonlib/lib")
-foreach(_d ${OPF_3RDPARTY_SRC_DIR} ${OPF_3RDPARTY_BIN_DIR}
-           ${OPFPY_SRC_DIR} ${OPFPY_INCLUDE_DIR}
+foreach(_d ${OPFPY_SRC_DIR} ${OPFPY_INCLUDE_DIR}
            ${OPFPY_BIN_DIR} ${OPFPY_LIB_DIR})
     file(MAKE_DIRECTORY "${_d}")
 endforeach()
@@ -91,9 +88,12 @@ if(WIN32)
     set_target_properties(opfpy PROPERTIES SUFFIX ".pyd")
 endif()
 
-get_target_property(OPF_PYBIND11_INCLUDE_DIRS pybind11::headers INTERFACE_INCLUDE_DIRECTORIES)
+set(OPF_PYBIND11_INCLUDE_DIRS "${pybind11_INCLUDE_DIRS}")
 if(NOT OPF_PYBIND11_INCLUDE_DIRS)
-    get_target_property(OPF_PYBIND11_INCLUDE_DIRS pybind11::pybind11 INTERFACE_INCLUDE_DIRECTORIES)
+    set(OPF_PYBIND11_INCLUDE_DIRS "${pybind11_INCLUDE_DIR}")
+endif()
+if(NOT OPF_PYBIND11_INCLUDE_DIRS)
+    set(OPF_PYBIND11_INCLUDE_DIRS "${Python_INCLUDE_DIRS}")
 endif()
 
 set(OPF_DEPS_FILE "${OPFPY_BIN_DIR}/opfpy_cython_deps.txt")
