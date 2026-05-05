@@ -227,27 +227,7 @@ When building Python extensions with **pybind11** (installed via Conan) and CMak
 
 ### Step 1: Discover the Correct Python Paths
 
-To install Python 3.14 in the UCRT64 environment of MSYS2, you should use the built-in package manager, pacman.As of early 2026, Python 3.14 packages are available in the official MSYS2 Package Repository MSYS2.
-
-Step-by-Step Installation:
-- Open the UCRT64 Terminal:Ensure you are specifically using the MSYS2 UCRT64 terminal (blue icon), not the MSYS, MINGW64, or MINGW32 versions.
-
-- Update the Package Database: It is always a good idea to sync your repositories before installing new software:
-```bash
-pacman -Sy
-```
-
-- Install Python 3.14: Run the following command to install the UCRT64-specific Python 3.14 package. This command installs the latest version available in the UCRT64 repository, which currently includes Python 3.14.4 MSYS2.
-```bash 
-pacman -S mingw-w64-ucrt-x86_64-python
-``` 
--  Verify the Installation:Check that the version is correct and that it is pointing to the UCRT64 path, The which command should return a path similar to `/ucrt64/bin/python.`:
-```bash
-python --version
-which python
-```
-
-- Open the **UCRT64** terminal in VS Code and run:
+Open the **UCRT64** terminal in VS Code and run:
 
 ```bash
 # Enter your venv directory

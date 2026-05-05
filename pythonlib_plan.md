@@ -9,7 +9,7 @@
   - All dependencies are installed (see README_GNU_CMake.md for platform-specific setup)
 - If the Python extension (opfpy) cannot be imported:
   - Ensure you are using the correct Python version and the .venv is activated
-  - Add the build output directory (`pythonlib/bin`) to your PYTHONPATH or sys.path
+  - Add the build output directory (../tools/3rdparty) to your PYTHONPATH or sys.path
   - Rebuild the extension after any changes to C++ or pybind11 code
 - For more details, see [build_opfpy.md](pythonlib/build_opfpy.md) and the main project README.
 
@@ -25,15 +25,11 @@ pythonlib/
   .venv/                # Virtual environment (created with uv)
   pyproject.toml        # Project metadata
   README.md
-  src/
-    pybind_stub.cpp     # pybind11 binding source
-  include/
-    opf/                # forwarding headers for the Python-facing build layout
-  bin/
-    opfpy.*             # Built Python extension module (from C++/pybind11)
-    opfpy_cython_deps.txt
-  lib/                  # Archive/import-library output for the extension target
   (Python test and helper scripts)
+tools/3rdparty/
+  opfpy.*               # Built Python extension module (from C++/pybind11)
+src_cpp/
+  pybind_stub.cpp       # pybind11 binding source (expand for full OPF API)
 include_cpp/opf/         # C++ headers for OPF core
 ```
 
@@ -68,7 +64,7 @@ include_cpp/opf/         # C++ headers for OPF core
     ```sh
     bash ./build_opfpy.sh
     ```
-  - This script will activate the venv, run Conan, configure CMake, build the extension into `pythonlib/bin`, and write the Cython dependency manifest to `pythonlib/bin/opfpy_cython_deps.txt`.
+  - This script will activate the venv, run Conan, configure CMake, build the extension, and copy it to tools/3rdparty.
   - See [build_opfpy.md](pythonlib/build_opfpy.md) for manual step-by-step details if needed.
 
 
@@ -77,7 +73,7 @@ include_cpp/opf/         # C++ headers for OPF core
   - Example:
     ```sh
     cd pythonlib
-    python -c "import sys; sys.path.insert(0, './bin'); import opfpy; print(opfpy.hello())"
+    python -c "import sys; sys.path.insert(0, '../tools/3rdparty'); import opfpy; print(opfpy.hello())"
     ```
 
 6. **Run Python tests (must use the C++ backend):**
@@ -103,33 +99,23 @@ This plan outlines the phased development of a Python library for OPF workflows,
 ## Phase 1: Data Structures & File I/O (C++ backend)
 - [x] Implement core data structures (`Node`, `Subgraph`) in C++ (see include_cpp/opf/Node.hpp, Subgraph.hpp)
 - [x] Expose data structures to Python via pybind11 (expand pybind_stub.cpp)
-- [x] Build `opfpy` from `pythonlib/src/pybind_stub.cpp` and output module artifacts to `pythonlib/bin`
-- [x] Generate Cython dependency manifest in `pythonlib/bin/opfpy_cython_deps.txt`
-- [x] Add dedicated `.pyx/.pxd` wrappers (optional Cython-facing layer) on top of `opfpy`
-  - `pythonlib/src/opfpy_cython.pxd` — cdef class declarations (`Node`, `Subgraph`) for `cimport`
-  - `pythonlib/src/opfpy_cython.pyx` — full Cython wrapper with typed properties, model I/O, and free functions
-- [x] Integrate Cython-facing wrappers into `pythonlib` packaging and tests
-  - CMakeLists.txt transpiles `.pyx` → `.cpp` via `cython --cplus -3`, then compiles to `pythonlib/bin/opfpy_cython.pyd`
-  - `pythonlib/test_opfpy_cython.py` — 12 tests covering Node/Subgraph wrappers, model I/O, original-file loading, roundtrip read/write, and free functions
 - [x] Implement OPF binary dataset file reader/writer in C++ and expose to Python
 - [x] Unit tests for data structures and file I/O (Python tests must use opfpy)
 - [x] **Test Results:**
-  - `python -m unittest test_opfpy_bindings -v` — **7 tests, OK** (Node/Subgraph bindings, model I/O, original-file loading, roundtrip read/write, file creation, missing-file error handling)
-  - `python -m unittest test_opfpy_cython -v` — **12 tests, OK** (Cython Node/Subgraph wrappers, `_raw` access, model I/O roundtrip, original-file loading, free-function read/write with both `opfpy.Subgraph` and `cy.Subgraph`)
-  - Combined: `python -m unittest test_opfpy_bindings test_opfpy_cython -v` — **19 tests, OK**
-- [x] **Validation Requirements:**
-  - [x] Can load and save OPF datasets without data loss (C++/Python roundtrip)
-  - [x] Data structures match expected fields and types (Python matches C++ reference)
+  - All unit tests passed successfully (see test_data.py output, using opfpy)
+- [ ] **Validation Requirements:**
+  - [ ] Can load and save OPF datasets without data loss (C++/Python roundtrip)
+  - [ ] Data structures match expected fields and types (Python matches C++ reference)
 
 ---
 
 
 ## Phase 2: Distance Computation (C++ backend)
-- [ ] Implement distance functions (Euclidean, Chi-Square, etc.) in C++
-- [ ] Expose distance functions to Python via pybind11
-- [ ] Implement distance matrix computation in C++ and expose to Python
-- [ ] Unit tests for distance functions and matrix (Python tests must use opfpy)
-- [ ] **Test Results:**
+- [x] Implement distance functions (Euclidean, Chi-Square, etc.) in C++
+- [x] Expose distance functions to Python via pybind11
+- [x] Implement distance matrix computation in C++ and expose to Python
+- [x] Unit tests for distance functions and matrix (Python tests must use opfpy)
+- [x] **Test Results:**
 - [ ] **Validation Requirements:**
   - [ ] Distances match C++ implementation for sample data (Python vs C++)
   - [ ] Handles edge cases (identical points, empty sets)
