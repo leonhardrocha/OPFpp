@@ -120,7 +120,8 @@ This plan outlines the phased development of a Python library for OPF workflows,
 - [x] **Validation Requirements:**
   - [x] Can load and save OPF datasets without data loss (C++/Python roundtrip)
   - [x] Data structures match expected fields and types (Python matches C++ reference)
-
+- [x] **Merge with main branch**
+  - [x] Push new commit to squash merge with main
 ---
 
 
