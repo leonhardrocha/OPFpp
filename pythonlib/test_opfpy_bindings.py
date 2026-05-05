@@ -1,5 +1,22 @@
 import unittest
 import os
+import sys
+
+# Ensure the built extension is on the path when run from pythonlib/
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), 'bin'))
+
+# On Windows, the .pyd is built with MSYS2/UCRT64 GCC and requires runtime DLLs.
+# Runtime folders are configured through VS Code settings using:
+# UCRT64_RUNTIME_FOLDER and UCRT64_RUNTIME_LIB_FOLDER.
+if sys.platform == "win32":
+    _runtime_dirs = [
+        os.environ.get("UCRT64_RUNTIME_FOLDER", r"D:\msys64\ucrt64\bin"),
+        os.environ.get("UCRT64_RUNTIME_LIB_FOLDER", r"D:\msys64\ucrt64\lib"),
+    ]
+    for _runtime_dir in _runtime_dirs:
+        if _runtime_dir and os.path.isdir(_runtime_dir):
+            os.add_dll_directory(_runtime_dir)
+
 from opfpy import Node, Subgraph
 
 class TestOPFBindings(unittest.TestCase):
@@ -29,7 +46,8 @@ class TestOPFBindings(unittest.TestCase):
         self.assertEqual(node.status, 1)
         self.assertEqual(node.relevant, 1)
         self.assertEqual(node.nplatadj, 2)
-        self.assertEqual(node.feat, [0.1, 0.2, 0.3])
+        for got, exp in zip(node.feat, [0.1, 0.2, 0.3]):
+            self.assertAlmostEqual(got, exp, places=5)
         self.assertEqual(node.adj, [1, 2, 3])
         node.add_to_adj(4)
         self.assertIn(4, node.adj)
@@ -49,13 +67,16 @@ class TestOPFBindings(unittest.TestCase):
         self.assertEqual(sg.nlabels, 2)
         self.assertEqual(sg.bestk, 1)
         self.assertEqual(sg.df, 0.5)
-        self.assertEqual(sg.mindens, 0.1)
-        self.assertEqual(sg.maxdens, 0.9)
+        self.assertAlmostEqual(sg.mindens, 0.1, places=5)
+        self.assertAlmostEqual(sg.maxdens, 0.9, places=5)
         self.assertEqual(sg.K, 2.0)
         self.assertEqual(sg.nnodes, 2)
         node0 = sg.get_node(0)
         node0.feat = [1.0, 2.0, 3.0]
         node0.label = 1
+        # Subgraph(n) pre-populates ordered_list_of_nodes with n zeros;
+        # clear before testing add/clear behaviour.
+        sg.clear_ordered_list_of_nodes()
         sg.add_ordered_node(0)
         self.assertEqual(sg.ordered_list_of_nodes, [0])
         sg.clear_ordered_list_of_nodes()
@@ -74,9 +95,82 @@ class TestOPFBindings(unittest.TestCase):
         self.assertEqual(sg2.nfeats, 2)
         self.assertEqual(sg2.nlabels, 1)
         self.assertEqual(sg2.nnodes, 1)
-        self.assertEqual(sg2.get_node(0).feat, [0.5, 0.6])
+        for got, exp in zip(sg2.get_node(0).feat, [0.5, 0.6]):
+            self.assertAlmostEqual(got, exp, places=5)
         self.assertEqual(sg2.get_node(0).label, 1)
         os.remove(tmpfile)
+
+
+class TestFileIO(unittest.TestCase):
+    """Tests for the OPF training-format free functions read_subgraph / write_subgraph."""
+
+    def _make_subgraph(self):
+        """Build a small Subgraph with 3 nodes and 2 features for roundtrip tests."""
+        import opfpy
+        sg = opfpy.Subgraph(3)
+        sg.nfeats = 2
+        sg.nlabels = 2
+        for i in range(3):
+            n = sg.get_node(i)
+            n.truelabel = (i % 2) + 1
+            n.position = i
+            n.pathval = float(i) * 0.1
+            n.feat = [float(i), float(i + 1)]
+        return sg
+
+    def test_write_read_roundtrip(self):
+        """write_subgraph then read_subgraph must recover identical nodes."""
+        import opfpy
+        sg = self._make_subgraph()
+        tmpfile = "_tmp_rw_subgraph.bin"
+        try:
+            opfpy.write_subgraph(tmpfile, sg)
+            sg2 = opfpy.read_subgraph(tmpfile)
+            self.assertEqual(sg2.nfeats, sg.nfeats)
+            self.assertEqual(sg2.nlabels, sg.nlabels)
+            self.assertEqual(sg2.nnodes, sg.nnodes)
+            for i in range(sg.nnodes):
+                self.assertEqual(sg2.get_node(i).truelabel, sg.get_node(i).truelabel)
+                self.assertEqual(sg2.get_node(i).position, sg.get_node(i).position)
+                self.assertAlmostEqual(sg2.get_node(i).pathval, sg.get_node(i).pathval, places=5)
+                self.assertEqual(sg2.get_node(i).feat, sg.get_node(i).feat)
+        finally:
+            if os.path.exists(tmpfile):
+                os.remove(tmpfile)
+
+    def test_write_creates_file(self):
+        """write_subgraph must create a non-empty file on disk."""
+        import opfpy
+        sg = self._make_subgraph()
+        tmpfile = "_tmp_write_check.bin"
+        try:
+            opfpy.write_subgraph(tmpfile, sg)
+            self.assertTrue(os.path.exists(tmpfile))
+            self.assertGreater(os.path.getsize(tmpfile), 0)
+        finally:
+            if os.path.exists(tmpfile):
+                os.remove(tmpfile)
+
+    def test_read_nonexistent_raises(self):
+        """read_subgraph must raise when the file does not exist."""
+        import opfpy
+        with self.assertRaises(Exception):
+            opfpy.read_subgraph("_nonexistent_file_xyz.bin")
+
+    def test_from_original_file_real_data(self):
+        """from_original_file must load boat.dat with sensible structure."""
+        dat = os.path.join(os.path.dirname(__file__), '..', 'data', 'boat.dat')
+        dat = os.path.normpath(dat)
+        if not os.path.exists(dat):
+            self.skipTest(f"Real dataset not found: {dat}")
+        sg = Subgraph.from_original_file(dat)
+        self.assertGreater(sg.nnodes, 0, "Expected at least one node")
+        self.assertGreater(sg.nfeats, 0, "Expected at least one feature")
+        self.assertGreater(sg.nlabels, 0, "Expected at least one label")
+        # Every node must have a feat vector of the right length
+        for i in range(sg.nnodes):
+            self.assertEqual(len(sg.get_node(i).feat), sg.nfeats)
+
 
 if __name__ == "__main__":
     unittest.main()

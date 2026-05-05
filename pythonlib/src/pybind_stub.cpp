@@ -4,8 +4,9 @@
 #include <memory>
 #include <vector>
 #include <string>
-#include "../include_cpp/opf/Node.hpp"
-#include "../include_cpp/opf/Subgraph.hpp"
+#include "../include/opf/Node.hpp"
+#include "../include/opf/Subgraph.hpp"
+#include "../include/opf/file.hpp"
 
 namespace py = pybind11;
 using opf::Node;
@@ -54,9 +55,15 @@ PYBIND11_MODULE(opfpy, m) {
         .def_property("maxdens", &Subgraph<float>::getMaxDens, &Subgraph<float>::setMaxDens)
         .def_property("K", &Subgraph<float>::getK, &Subgraph<float>::setK)
         .def_property_readonly("nnodes", &Subgraph<float>::getNumNodes)
-        .def("get_node", &Subgraph<float>::getNode, py::return_value_policy::reference_internal)
+        .def("get_node",
+            static_cast<Node<float>& (Subgraph<float>::*)(int)>(&Subgraph<float>::getNode),
+            py::return_value_policy::reference_internal)
         .def("add_node", &Subgraph<float>::addNode)
-        .def("get_nodes", &Subgraph<float>::getNodes, py::return_value_policy::reference_internal)
+        .def("get_nodes",
+            [](Subgraph<float>& sg) -> std::vector<Node<float>>& {
+                return const_cast<std::vector<Node<float>>&>(sg.getNodes());
+            },
+            py::return_value_policy::reference_internal)
         .def("add_ordered_node", &Subgraph<float>::addOrderedNode)
         .def("clear_ordered_list_of_nodes", &Subgraph<float>::clearOrderedListOfNodes)
         .def_property_readonly("ordered_list_of_nodes", &Subgraph<float>::getOrderedListOfNodes)
@@ -66,4 +73,17 @@ PYBIND11_MODULE(opfpy, m) {
             return opf::ReadSubgraph_original<float>(filename);
         }, py::arg("filename"), "Read a Subgraph from the original OPF binary file format.")
         ;
+
+    // Free functions: OPF training-format file I/O (truelabel/position/pathval/features)
+    m.def("read_subgraph", [](const std::string& filename) {
+        opf::Subgraph<float> sg;
+        opf::readSubgraph<float>(filename, sg);
+        return sg;
+    }, py::arg("filename"),
+       "Read a Subgraph from the OPF training binary format (truelabel, position, pathval, features).");
+
+    m.def("write_subgraph", [](const std::string& filename, const opf::Subgraph<float>& sg) {
+        opf::writeSubgraph<float>(filename, sg);
+    }, py::arg("filename"), py::arg("subgraph"),
+       "Write a Subgraph to the OPF training binary format.");
 }

@@ -7,7 +7,13 @@ pacman -Sy --needed --noconfirm \
     mingw-w64-ucrt-x86_64-cmake \
     mingw-w64-ucrt-x86_64-ninja \
     mingw-w64-ucrt-x86_64-python \
-    mingw-w64-ucrt-x86_64-python-pip
+    mingw-w64-ucrt-x86_64-uv
+
 
 # Para o pip no MSYS2/UCRT64 (usando a flag de bypass do ambiente gerenciado)
-/ucrt64/bin/python -m pip install conan pybind11 --break-system-packages --quiet
+# mkdir pythonlib
+# cd pythonlib
+# uv venv .venv
+# source .venv/Scripts/activate
+# uv pip install conan pybind11 --break-system-packages --quiet
+# /ucrt64/bin/python -m pip install conan pybind11 --break-system-packages --quiet

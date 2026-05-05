@@ -30,12 +30,13 @@ This sets up the build system using the Conan toolchain and finds all dependenci
 ```sh
 cmake --build build --target opfpy
 ```
-The resulting Python extension (opfpy.pyd/.so) will be placed in `tools/3rdparty`.
+The resulting Python extension (opfpy.pyd/.so) will be placed in `pythonlib/bin`.
+The generated dependency manifest for Cython-facing integration is written to `pythonlib/bin/opfpy_cython_deps.txt`.
 
 ### 5. Test the extension
 From the `pythonlib` directory:
 ```sh
-python -c "import sys; sys.path.insert(0, '../tools/3rdparty'); import opfpy; print(opfpy.hello())"
+python -c "import sys; sys.path.insert(0, './bin'); import opfpy; print(opfpy.hello())"
 ```
 You should see: `Hello from OPF C++!`
 
