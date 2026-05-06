@@ -7,6 +7,7 @@
 #include "../include/opf/Node.hpp"
 #include "../include/opf/Subgraph.hpp"
 #include "../include/opf/file.hpp"
+#include "../../include_cpp/opf/Distance.hpp"
 
 namespace py = pybind11;
 using opf::Node;
@@ -86,4 +87,13 @@ PYBIND11_MODULE(opfpy, m) {
         opf::writeSubgraph<float>(filename, sg);
     }, py::arg("filename"), py::arg("subgraph"),
        "Write a Subgraph to the OPF training binary format.");
+
+    // Distance functions
+    m.def("eucl_dist", &opf::distance::euclDist, "Euclidean distance between two float vectors");
+    m.def("chi_squared_dist", &opf::distance::chiSquaredDist, "Chi-Squared distance between two float vectors");
+    m.def("manhattan_dist", &opf::distance::manhattanDist, "Manhattan distance between two float vectors");
+    m.def("canberra_dist", &opf::distance::canberraDist, "Canberra distance between two float vectors");
+    m.def("squared_chord_dist", &opf::distance::squaredChordDist, "Squared Chord distance between two float vectors");
+    m.def("squared_chi_squared_dist", &opf::distance::squaredChiSquaredDist, "Squared Chi-Squared distance between two float vectors");
+    m.def("bray_curtis_dist", &opf::distance::brayCurtisDist, "Bray-Curtis distance between two float vectors");
 }

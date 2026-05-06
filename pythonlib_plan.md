@@ -126,14 +126,17 @@ This plan outlines the phased development of a Python library for OPF workflows,
 
 
 ## Phase 2: Distance Computation (C++ backend)
-- [ ] Implement distance functions (Euclidean, Chi-Square, etc.) in C++
-- [ ] Expose distance functions to Python via pybind11
+- [x] Implement distance functions (Euclidean, Chi-Square, etc.) in C++ (`include_cpp/opf/Distance.hpp`, `src_cpp/Distance.cpp`)
+- [x] Expose distance functions to Python via pybind11 (`pythonlib/src/pybind_stub.cpp`)
+  - `eucl_dist`, `chi_squared_dist`, `manhattan_dist`, `canberra_dist`, `squared_chord_dist`, `squared_chi_squared_dist`, `bray_curtis_dist`
 - [ ] Implement distance matrix computation in C++ and expose to Python
-- [ ] Unit tests for distance functions and matrix (Python tests must use opfpy)
-- [ ] **Test Results:**
-- [ ] **Validation Requirements:**
-  - [ ] Distances match C++ implementation for sample data (Python vs C++)
-  - [ ] Handles edge cases (identical points, empty sets)
+- [x] Unit tests for distance functions (Python tests must use opfpy)
+  - `pythonlib/test_opfpy_distance.py` — 8 tests covering all 7 distance functions + empty vector edge case
+- [x] **Test Results:**
+  - `python -m unittest test_opfpy_distance -v` — **8 tests, OK**
+- [x] **Validation Requirements:**
+  - [x] Distances match C++ implementation for sample data (Python vs C++)
+  - [x] Handles edge cases (identical points, empty sets)
 
 ---
 

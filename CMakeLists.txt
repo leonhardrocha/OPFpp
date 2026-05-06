@@ -66,6 +66,7 @@ find_package(pybind11 REQUIRED)
 add_library(opfpy MODULE
     ${OPFPY_SRC_DIR}/pybind_stub.cpp
     src_cpp/file.cpp
+    src_cpp/Distance.cpp
 )
 
 target_include_directories(opfpy PRIVATE
