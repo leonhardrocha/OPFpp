@@ -66,7 +66,10 @@ find_package(pybind11 REQUIRED)
 add_library(opfpy MODULE
     ${OPFPY_SRC_DIR}/pybind_stub.cpp
     src_cpp/file.cpp
+<<<<<<< dev-cpp-wrapper-phase-2
     src_cpp/Distance.cpp
+=======
+>>>>>>> main
 )
 
 target_include_directories(opfpy PRIVATE
