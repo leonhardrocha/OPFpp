@@ -23,6 +23,18 @@ This C++20 version modernizes the original C codebase with:
 - **Object-oriented design:** Clean, modular API replacing procedural C functions
 - **Cross-platform build system:** CMake replaces the original Makefile for easier portability
 
+### Repository Layout
+
+| Path | Contents |
+|---|---|
+| `src/` | C++20 implementation files (`.cpp`) — formerly `src_cpp/` |
+| `include_cpp/opf/` | C++20 headers (`Node.hpp`, `Subgraph.hpp`, `OPF.hpp`, `Distance.hpp`, `Utils.hpp`) |
+| `include/` | Legacy C headers (kept for reference) |
+| `LibOPF/` | Git submodule — the upstream C reference implementation ([jppbsi/LibOPF](https://github.com/jppbsi/LibOPF)) |
+| `pythonlib/` | Python bindings (`opfpy` pybind11 extension, Cython wrapper, tests) |
+| `tests_cpp/` | C++ integration tests |
+| `data/` | Sample datasets in OPF binary format |
+
 ### C++ Version License
 
 The C++20 conversion is authored by **Leonardo Marques Rocha**, one of the original authors of the OPF algorithm, and is made available under the same license as the original LibOPF library. Please refer to the [COPYING](COPYING) and [COPYRIGHT](COPYRIGHT) files for license details.
@@ -112,6 +124,14 @@ The conversion from C to C++20 follows a systematic approach outlined in [conver
 - **Build System:** Migration from Makefile to CMake for cross-platform support
 
 For implementation details, see [conversion_plan.md](conversion_plan.md).
+
+### Upstream C Reference
+
+The `LibOPF/` subdirectory is a Git submodule pointing to the canonical upstream C library at [github.com/jppbsi/LibOPF](https://github.com/jppbsi/LibOPF). It is included as a read-only reference for algorithm verification and is **not** compiled or linked into this project. After cloning, initialize it with:
+
+```bash
+git submodule update --init LibOPF
+```
 
 ---
 
@@ -341,11 +361,6 @@ cd build
 ctest
 ```
 
-## TODO
-
-- Fix bug in C/C++ OPF classifier accuracy if not all label are present in eval set (divides by zero -> nan)
-
-
 Individual test executables are located in `build/bin/test_*.exe`.
 
 ---
@@ -470,4 +485,4 @@ The C++20 conversion is authored by **Leonardo Marques Rocha** and is provided u
 
 ---
 
-**Last Updated:** February 2026
+**Last Updated:** May 2026

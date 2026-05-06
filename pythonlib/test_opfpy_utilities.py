@@ -67,12 +67,7 @@ class TestNormalize(unittest.TestCase):
 
 class TestPruning(unittest.TestCase):
     def test_pruning_returns_float(self):
-        """pruning() returns a float in [0, 1].
-
-        Note: the pruning loop (acc >= desired_acc) accesses sg_eval.node.pred which
-        is not set by classifying() — a known C++ bug. We test with desired_accuracy
-        above the achievable maximum so the loop body never executes.
-        """
+        """pruning() returns a float in [0, 1]."""
         train = _make_subgraph([
             ([0.0, 0.0], 1),
             ([0.1, 0.1], 1),
@@ -85,9 +80,8 @@ class TestPruning(unittest.TestCase):
         ], nfeats=2, nlabels=2)
 
         clf = opfpy.OPF()
-        # Use desired_accuracy > 1.0 so the pruning loop never executes
-        # (avoids the C++ bug where eval.pred is -1 when accessed as a train index)
-        rate = clf.pruning(train, eval_sg, desired_accuracy=1.1)
+        # desired_accuracy=0.01: stop if accuracy drops >1% between iterations.
+        rate = clf.pruning(train, eval_sg, desired_accuracy=0.01)
 
         self.assertIsInstance(rate, float)
         self.assertGreaterEqual(rate, 0.0)

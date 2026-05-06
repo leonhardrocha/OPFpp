@@ -150,7 +150,7 @@ This plan outlines the phased development of a Python library for OPF workflows,
   - `pythonlib/test_opfpy_supervised.py` — 3 tests covering split, train+classify+accuracy, and learn
 - [x] **Test Results:**
   - `python -m unittest test_opfpy_supervised -v` — **3 tests, OK**
-  - Bug found in C/C++ OPF classifier accuracy if not all label are present in eval set (divides by zero -> nan), but not related here, added to TODO section in @READ.md
+  - Bug found in C/C++ OPF classifier accuracy if not all labels are present in eval set (divides by zero → NaN). Fixed in Phase 5 (`accuracy()` in `OPF.hpp`).
   - No output files (.out, .acc) are  generated, it is diferent from the C version, but it is ok as it is object-based (C++)
 - [x] **Validation Requirements:**
   - [x] Classification accuracy matches C++ reference for known datasets
@@ -177,13 +177,22 @@ This plan outlines the phased development of a Python library for OPF workflows,
 
 
 ## Phase 5: Utilities & Tools (C++ backend)
-- [ ] Expose normalization, info, and fold utilities from C++ to Python
-- [ ] Expose precomputed distance file support from C++ to Python
-- [ ] Unit tests for utilities (Python tests must use opfpy)
-- [ ] **Test Results:** (to be filled by user)
-- [ ] **Validation Requirements:**
-  - [ ] Utilities produce correct outputs for sample data
-  - [ ] All file formats are compatible with C++/C reference
+- [x] Expose normalization, info, and fold utilities from C++ to Python
+- [x] Expose precomputed distance file support from C++ to Python
+- [x] Unit tests for utilities (Python tests must use opfpy)
+- [x] Fix `accuracy()` divide-by-zero when a class covers all nodes (FP rate set to 0)
+- [x] Fix `pruning()` to match upstream `opf_OPFPruning` semantics:
+  - Added `classifyingAndMarkNodes` private helper that tracks the conqueror training node
+  - Corrected loop condition to `fabs(current_acc - old_acc) <= desired_acc` (tolerance, not floor)
+  - Added max-iterations cap (100)
+  - Added per-iteration `setPred(-1)` + `setRelevant(0)` reset on training nodes
+  - Added second `training()` call after pruning before measuring new accuracy
+- [x] Source tree refactored: legacy C `src/` removed, `src_cpp/` renamed to `src/`
+- [x] `LibOPF` upstream C reference added as git submodule
+- [x] **Test Results:** 54/54 tests pass (Phases 1–5, no regressions)
+- [x] **Validation Requirements:**
+  - [x] Utilities produce correct outputs for sample data
+  - [x] All file formats are compatible with C++/C reference
 
 ---
 

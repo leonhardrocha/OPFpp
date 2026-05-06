@@ -123,7 +123,9 @@ PYBIND11_MODULE(opfpy, m) {
             "Normalize subgraph features in-place using z-score (mean/std-dev per feature).")
         .def("pruning", &OPF<float>::pruning,
             py::arg("train_subgraph"), py::arg("eval_subgraph"), py::arg("desired_accuracy"),
-            "Prune irrelevant training nodes to reach desired_accuracy. Returns achieved pruning rate.");
+            "Iteratively prune irrelevant training nodes. desired_accuracy is the maximum "
+            "allowed per-iteration accuracy drop (tolerance). Stops when the drop exceeds "
+            "the tolerance or after 100 iterations. Returns the fraction of nodes removed.");
 
     // Propagate cluster labels from each node's root to all tree members
     m.def("propagate_cluster_labels", [](opf::Subgraph<float>& sg) {
