@@ -92,7 +92,43 @@ PYBIND11_MODULE(opfpy, m) {
             "Run iterative OPF learning in-place on train_subgraph using eval_subgraph.")
         .def("accuracy", &OPF<float>::accuracy,
             py::arg("subgraph"),
-            "Compute OPF accuracy from node labels vs. truelabels.");
+            "Compute OPF accuracy from node labels vs. truelabels.")
+        // Phase 4: unsupervised / semi-supervised
+        .def("cluster", &OPF<float>::clustering,
+            py::arg("subgraph"),
+            "Unsupervised OPF clustering in-place. Requires node dens and adj lists populated.")
+        .def("knn_classify", &OPF<float>::knnClassifying,
+            py::arg("train_subgraph"), py::arg("test_subgraph"),
+            "k-NN OPF classification in-place using per-node radius in train_subgraph.")
+        .def("semi_supervised", [](OPF<float>& self,
+                                   opf::Subgraph<float>& sg_labeled,
+                                   opf::Subgraph<float>& sg_unlabeled,
+                                   py::object sg_eval_obj) {
+                opf::Subgraph<float>* eval_ptr = nullptr;
+                std::unique_ptr<opf::Subgraph<float>> eval_owner;
+                if (!sg_eval_obj.is_none()) {
+                    eval_owner = std::make_unique<opf::Subgraph<float>>(
+                        sg_eval_obj.cast<opf::Subgraph<float>>());
+                    eval_ptr = eval_owner.get();
+                }
+                return self.semiSupervisedLearning(sg_labeled, sg_unlabeled, eval_ptr);
+            },
+            py::arg("labeled_subgraph"), py::arg("unlabeled_subgraph"),
+            py::arg("eval_subgraph") = py::none(),
+            "Semi-supervised OPF learning. Returns merged trained subgraph.");
+
+    // Propagate cluster labels from each node's root to all tree members
+    m.def("propagate_cluster_labels", [](opf::Subgraph<float>& sg) {
+        for (int i = 0; i < sg.getNumNodes(); ++i) {
+            int root = sg.getNode(i).getRoot();
+            if (root == i) {
+                sg.getNode(i).setLabel(sg.getNode(i).getTruelabel());
+            } else {
+                sg.getNode(i).setLabel(sg.getNode(root).getLabel());
+            }
+        }
+    }, py::arg("subgraph"),
+       "Propagate each cluster root's label to all nodes in its tree.");
 
     // Free functions: OPF training-format file I/O (truelabel/position/pathval/features)
     m.def("read_subgraph", [](const std::string& filename) {
