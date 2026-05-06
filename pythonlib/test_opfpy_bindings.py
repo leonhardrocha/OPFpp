@@ -5,6 +5,11 @@ import sys
 # Ensure the built extension is on the path when run from pythonlib/
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), 'bin'))
 
+<<<<<<< dev-cpp-wrapper-phase-2
+# Add MSYS2/UCRT64 runtime DLL directories on Windows
+from windows_runtime_helper import add_windows_runtime_dirs
+add_windows_runtime_dirs()
+=======
 # On Windows, the .pyd is built with MSYS2/UCRT64 GCC and requires runtime DLLs.
 # Runtime folders are configured through VS Code settings using:
 # UCRT64_RUNTIME_FOLDER and UCRT64_RUNTIME_LIB_FOLDER.
@@ -16,6 +21,7 @@ if sys.platform == "win32":
     for _runtime_dir in _runtime_dirs:
         if _runtime_dir and os.path.isdir(_runtime_dir):
             os.add_dll_directory(_runtime_dir)
+>>>>>>> main
 
 from opfpy import Node, Subgraph
 

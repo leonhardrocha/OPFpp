@@ -1,0 +1,4 @@
+# Python dependencies for recreating pythonlib/.venv
+# Install with: python -m pip install -r requirements.txt
+
+conan>=2.0
