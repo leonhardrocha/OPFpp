@@ -1,3 +1,6 @@
 [submodule "conan_src"]
 	path = conan_src
 	url = https://github.com/conan-io/conan
+[submodule "LibOPF"]
+	path = LibOPF
+	url = https://github.com/jppbsi/LibOPF
