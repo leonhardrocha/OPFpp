@@ -14,9 +14,9 @@ _PYTHONLIB_DIR = os.path.normpath(os.path.join(os.path.dirname(__file__), ".."))
 if _PYTHONLIB_DIR not in sys.path:
     sys.path.insert(0, _PYTHONLIB_DIR)
 
-from opf.utils import load, split, accuracy, info
-from opf.unsupervised import semi_supervised
-from opf.supervised import classify as opf_classify
+from opfppy.utils import load, split, accuracy, info
+from opfppy.unsupervised import semi_supervised
+from opfppy.supervised import classify as opf_classify
 
 DATA_FILE = os.path.join(os.path.dirname(__file__), "..", "..", "data", "saturn.dat")
 

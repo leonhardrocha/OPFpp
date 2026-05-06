@@ -14,8 +14,8 @@ _PYTHONLIB_DIR = os.path.normpath(os.path.join(os.path.dirname(__file__), ".."))
 if _PYTHONLIB_DIR not in sys.path:
     sys.path.insert(0, _PYTHONLIB_DIR)
 
-from opf.utils import load, split, info
-from opf.supervised import learn_and_classify
+from opfppy.utils import load, split, info
+from opfppy.supervised import learn_and_classify
 
 DATA_FILE = os.path.join(os.path.dirname(__file__), "..", "..", "data", "boat.dat")
 

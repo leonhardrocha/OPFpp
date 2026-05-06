@@ -1,5 +1,5 @@
 """
-opf.utils — helper functions for loading, splitting, normalising, and
+opfppy.utils — helper functions for loading, splitting, normalising, and
 evaluating OPF subgraphs.  All I/O is delegated to the opfpy C++ extension.
 """
 
@@ -9,7 +9,7 @@ import struct
 
 import opfpy
 from opfpy import Subgraph
-from opf.distance import DistanceMetric, DistanceSpec, resolve as _resolve_distance
+from opfppy.distance import DistanceMetric, DistanceSpec, resolve as _resolve_distance
 
 
 # ---------------------------------------------------------------------------

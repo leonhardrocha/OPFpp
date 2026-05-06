@@ -67,8 +67,8 @@ class TestIntegrationExample1Supervised(unittest.TestCase):
     @_skip_if_missing(BOAT_DAT)
     def test_train_and_classify(self):
         """Example 1: train on 50%, classify the other 50%. Accuracy > 0."""
-        from opf.supervised import train_and_classify
-        from opf.utils import load, split
+        from opfppy.supervised import train_and_classify
+        from opfppy.utils import load, split
 
         data = load(BOAT_DAT)
         train_sg, test_sg = split(data, 0.5)
@@ -89,8 +89,8 @@ class TestIntegrationExample2Learning(unittest.TestCase):
     @_skip_if_missing(BOAT_DAT)
     def test_learn_and_classify(self):
         """Example 2: 30/20/50 split, learning, classify. Accuracy > 0."""
-        from opf.supervised import learn_and_classify
-        from opf.utils import load, split
+        from opfppy.supervised import learn_and_classify
+        from opfppy.utils import load, split
 
         data = load(BOAT_DAT)
         train_sg, rest = split(data, 0.3)
@@ -112,10 +112,10 @@ class TestIntegrationExample3DistanceMatrix(unittest.TestCase):
     @_skip_if_missing(CONE_TORUS_DAT)
     def test_distance_matrix_roundtrip_and_classify(self):
         """Example 3: compute Manhattan matrix, roundtrip binary I/O, classify."""
-        from opf.utils import load, split, compute_distance_matrix
-        from opf.utils import write_distance_matrix, read_distance_matrix
-        from opf.supervised import train_and_classify
-        from opf.distance import DistanceMetric
+        from opfppy.utils import load, split, compute_distance_matrix
+        from opfppy.utils import write_distance_matrix, read_distance_matrix
+        from opfppy.supervised import train_and_classify
+        from opfppy.distance import DistanceMetric
 
         data = load(CONE_TORUS_DAT)
 
@@ -160,8 +160,8 @@ class TestIntegrationExample4Normalization(unittest.TestCase):
     @_skip_if_missing(BOAT_DAT)
     def test_normalize_then_classify(self):
         """Example 4: z-score normalize, then train/classify. Accuracy > 0."""
-        from opf.utils import load, split, normalize
-        from opf.supervised import train_and_classify
+        from opfppy.utils import load, split, normalize
+        from opfppy.supervised import train_and_classify
 
         data = load(BOAT_DAT)
         normalize(data)
@@ -188,7 +188,7 @@ class TestIntegrationExample5Unsupervised(unittest.TestCase):
     @_skip_if_missing(DATA1_DAT)
     def test_knn_classify_after_propagation(self):
         """Example 5: build knn radius, propagate labels, knn_classify test."""
-        from opf.utils import load, split, accuracy
+        from opfppy.utils import load, split, accuracy
 
         data = load(DATA1_DAT)
         train_sg, test_sg = split(data, 0.8)
@@ -224,9 +224,9 @@ class TestIntegrationExample6SemiSupervised(unittest.TestCase):
     @_skip_if_missing(SATURN_DAT)
     def test_semi_supervised_classify(self):
         """Example 6: labeled + unlabeled training, classify held-out test."""
-        from opf.utils import load, split, accuracy
-        from opf.unsupervised import semi_supervised
-        from opf.supervised import classify as opf_classify
+        from opfppy.utils import load, split, accuracy
+        from opfppy.unsupervised import semi_supervised
+        from opfppy.supervised import classify as opf_classify
 
         data = load(SATURN_DAT)
         z1, rest = split(data, 0.6)
@@ -253,22 +253,22 @@ class TestPackageImports(unittest.TestCase):
 
     def test_import_opf_package(self):
         """The opf package must be importable and expose sub-modules."""
-        import opf  # noqa: F401
+        import opfppy  # noqa: F401
 
     def test_import_opf_utils(self):
-        from opf import utils  # noqa: F401
+        from opfppy import utils  # noqa: F401
 
     def test_import_opf_supervised(self):
-        from opf import supervised  # noqa: F401
+        from opfppy import supervised  # noqa: F401
 
     def test_import_opf_unsupervised(self):
-        from opf import unsupervised  # noqa: F401
+        from opfppy import unsupervised  # noqa: F401
 
     def test_import_opf_distance_module(self):
-        from opf import distance  # noqa: F401
+        from opfppy import distance  # noqa: F401
 
     def test_distance_metric_enum(self):
-        from opf.distance import DistanceMetric, resolve
+        from opfppy.distance import DistanceMetric, resolve
         self.assertEqual(resolve("euclidean"),  1)
         self.assertEqual(resolve("MANHATTAN"),  3)
         self.assertEqual(resolve("l1"),         3)
@@ -278,21 +278,21 @@ class TestPackageImports(unittest.TestCase):
         self.assertEqual(resolve(7),            7)
 
     def test_distance_metric_errors(self):
-        from opf.distance import resolve
+        from opfppy.distance import resolve
         with self.assertRaises(ValueError):
             resolve("no_such_metric")
         with self.assertRaises(TypeError):
             resolve(3.14)
 
     def test_distance_register(self):
-        from opf.distance import register, resolve
+        from opfppy.distance import register, resolve
         register("alias_for_bray", 7)
         self.assertEqual(resolve("alias_for_bray"), 7)
 
     def test_pretty_repr_node(self):
-        import opf  # noqa: F401  # ensure repr patch side-effects are applied
+        import opfppy
 
-        node = opfpy.Node()
+        node = opfppy.Node()
         node.label = 2
         node.truelabel = 2
         node.pathval = 0.123456
@@ -314,14 +314,14 @@ class TestPackageImports(unittest.TestCase):
         self.assertIn("adj=[1, 2, 3, ..., 7, 8] (8)", text)
 
     def test_pretty_repr_subgraph_and_opf(self):
-        import opf  # noqa: F401  # ensure repr patch side-effects are applied
+        import opfppy
 
-        sg = opfpy.Subgraph()
+        sg = opfppy.Subgraph()
         sg.nfeats = 2
         sg.nlabels = 3
 
         for i in range(6):
-            node = opfpy.Node()
+            node = opfppy.Node()
             node.label = (i % 3) + 1
             node.truelabel = (i % 3) + 1
             node.feat = [float(i), float(i + 1)]
@@ -334,7 +334,7 @@ class TestPackageImports(unittest.TestCase):
         self.assertIn("...", sg_text)
         self.assertIn("[5] Node(", sg_text)
 
-        self.assertEqual(repr(opfpy.OPF()), "OPF()")
+        self.assertEqual(repr(opfppy.OPF()), "OPF()")
 
 
 if __name__ == "__main__":

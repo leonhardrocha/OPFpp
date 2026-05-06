@@ -198,19 +198,31 @@ This plan outlines the phased development of a Python library for OPF workflows,
 
 
 ## Phase 6: Integration & Documentation
-- [ ] Integrate all C++/pybind11 modules into a single Python package (opfpy)
-- [ ] Write user documentation and API reference (Python and C++)
-- [ ] Provide example scripts for all workflows (Python scripts using opfpy)
-- [ ] **Test Results:** (to be filled by user)
-- [ ] **Validation Requirements:**
-  - [ ] All workflows run end-to-end on example datasets (Python calls C++ backend)
-  - [ ] Documentation is clear and complete
+- [x] Rename `opf/` package to `opfppy/` (git mv) — package is now **OPF Pretty PYthon**
+- [x] Create `opfppy/node.py` — Python shim class for `opfpy.Node` (pretty repr, `wrap()`, `register()`)
+- [x] Create `opfppy/subgraph.py` — Python shim class for `opfpy.Subgraph` (pretty repr, factory class-methods)
+- [x] Create `opfppy/opf_class.py` — Python shim class for `opfpy.OPF` (pretty repr, `wrap()`, `register()`)
+- [x] Create `opfppy/distance.py` — `DistanceMetric` IntEnum + `resolve()` / `register()` factory pattern
+- [x] Update `opfppy/__init__.py` — centralised bootstrap (sys.path, Windows DLL setup), re-exports all opfpy free functions and shim classes
+- [x] Update `opfppy/utils.py`, `supervised.py`, `unsupervised.py` — removed per-module runtime setup, use package bootstrap; `compute_distance_matrix` accepts `int | str | DistanceMetric`
+- [x] Remove `opfppy/_repr.py` monkey-patch — repr is now owned by the shim classes, not injected into opfpy types
+- [x] Update `pyproject.toml` — `name = "opfppy"`, `include = ["opfppy*"]`
+- [x] Provide 6 example scripts in `pythonlib/examples/` (example1–6)
+- [x] Write `pythonlib/README.md` — full API reference, layer naming convention (opfppy / opfpy_cython / opfpy), comparison table of what each layer provides
+- [x] Write `pythonlib/test_opfpy_integration.py` — 16 integration tests (Examples 1–6 + package imports + DistanceMetric + repr tests)
+- [x] **Test Results:** 70/70 tests pass (54 Phases 1–5 + 16 Phase 6 integration), no regressions
+- [x] **Validation Requirements:**
+  - [x] All workflows run end-to-end on example datasets (Python calls C++ backend)
+  - [x] Documentation is clear and complete
+  - [x] `import opfppy` is the only required import — no manual `sys.path` manipulation needed
+  - [x] `DistanceMetric` enum, string aliases, and integer ids all resolve correctly
+  - [x] Pretty repr works for `Node`, `Subgraph`, and `OPF` shim classes
 
 ---
 
 
 ## Final Validation
-- [ ] All tests in each phase are passing (Python tests use C++ backend)
+- [x] All tests in each phase are passing (Python tests use C++ backend)
 - [ ] User has manually checked all validation requirements
 - [ ] User confirms the library is ready for release
 

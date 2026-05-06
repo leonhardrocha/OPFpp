@@ -1,11 +1,11 @@
 """
-opf.unsupervised — high-level wrappers for unsupervised and semi-supervised
+opfppy.unsupervised — high-level wrappers for unsupervised and semi-supervised
 OPF workflows.
 
 Typical usage::
 
-    from opf.unsupervised import cluster_and_propagate
-    from opf.utils import load, split, accuracy
+    from opfppy.unsupervised import cluster_and_propagate
+    from opfppy.utils import load, split, accuracy
 
     data = load("../data/data1.dat")
     train, test = split(data, 0.8)

@@ -1,10 +1,10 @@
 """
-opf.supervised — high-level wrappers for the supervised OPF workflow.
+opfppy.supervised — high-level wrappers for the supervised OPF workflow.
 
 Typical usage::
 
-    from opf.supervised import train_and_classify, learn_and_classify
-    from opf.utils import load, split, accuracy
+    from opfppy.supervised import train_and_classify, learn_and_classify
+    from opfppy.utils import load, split, accuracy
 
     data = load("../data/boat.dat")
     train, test = split(data, 0.5)

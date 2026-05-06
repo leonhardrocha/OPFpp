@@ -19,9 +19,9 @@ _PYTHONLIB_DIR = os.path.normpath(os.path.join(os.path.dirname(__file__), ".."))
 if _PYTHONLIB_DIR not in sys.path:
     sys.path.insert(0, _PYTHONLIB_DIR)
 
-from opf.utils import load, split, info, accuracy
-from opf.utils import compute_distance_matrix, write_distance_matrix, read_distance_matrix
-from opf.supervised import train_and_classify
+from opfppy.utils import load, split, info, accuracy
+from opfppy.utils import compute_distance_matrix, write_distance_matrix, read_distance_matrix
+from opfppy.supervised import train_and_classify
 
 DATA_FILE = os.path.join(os.path.dirname(__file__), "..", "..", "data", "cone-torus.dat")
 

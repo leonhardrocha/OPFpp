@@ -1,9 +1,9 @@
 """
-opf.distance — DistanceMetric enum and resolver factory.
+opfppy.distance — DistanceMetric enum and resolver factory.
 
 Usage
 -----
->>> from opf.distance import DistanceMetric, resolve
+>>> from opfppy.distance import DistanceMetric, resolve
 >>> resolve("manhattan")       # → 3
 >>> resolve(DistanceMetric.MANHATTAN)  # → 3
 >>> resolve(3)                 # → 3
@@ -13,7 +13,7 @@ Extending
 Call ``register(name, id)`` to add a custom metric that maps to an integer
 id already implemented at the C++ layer::
 
-    from opf.distance import register
+    from opfppy.distance import register
     register("my_metric", 8)   # after rebuilding opfpy with id 8 support
 
 """
