@@ -1,6 +1,7 @@
 #include <pybind11/pybind11.h>
 #include <pybind11/stl.h>
 #include <pybind11/functional.h>
+#include <fstream>
 #include <memory>
 #include <vector>
 #include <string>
@@ -115,7 +116,14 @@ PYBIND11_MODULE(opfpy, m) {
             },
             py::arg("labeled_subgraph"), py::arg("unlabeled_subgraph"),
             py::arg("eval_subgraph") = py::none(),
-            "Semi-supervised OPF learning. Returns merged trained subgraph.");
+            "Semi-supervised OPF learning. Returns merged trained subgraph.")
+        // Phase 5: utilities
+        .def("normalize", &OPF<float>::normalize,
+            py::arg("subgraph"),
+            "Normalize subgraph features in-place using z-score (mean/std-dev per feature).")
+        .def("pruning", &OPF<float>::pruning,
+            py::arg("train_subgraph"), py::arg("eval_subgraph"), py::arg("desired_accuracy"),
+            "Prune irrelevant training nodes to reach desired_accuracy. Returns achieved pruning rate.");
 
     // Propagate cluster labels from each node's root to all tree members
     m.def("propagate_cluster_labels", [](opf::Subgraph<float>& sg) {
@@ -160,4 +168,95 @@ PYBIND11_MODULE(opfpy, m) {
     m.def("squared_chord_dist", &opf::distance::squaredChordDist, "Squared Chord distance between two float vectors");
     m.def("squared_chi_squared_dist", &opf::distance::squaredChiSquaredDist, "Squared Chi-Squared distance between two float vectors");
     m.def("bray_curtis_dist", &opf::distance::brayCurtisDist, "Bray-Curtis distance between two float vectors");
+
+    // Phase 5: utility free functions
+
+    m.def("subgraph_info", [](const opf::Subgraph<float>& sg) {
+        py::dict info;
+        info["nnodes"]  = sg.getNumNodes();
+        info["nlabels"] = sg.getNumLabels();
+        info["nfeats"]  = sg.getNumFeats();
+        return info;
+    }, py::arg("subgraph"),
+       "Return a dict with nnodes, nlabels, and nfeats for the given subgraph.");
+
+    m.def("k_fold", [](opf::Subgraph<float>& sg, int k) {
+        return opf::kFold<float>(sg, k);
+    }, py::arg("subgraph"), py::arg("k"),
+       "Stratified k-fold partition of a subgraph. Returns a list of k Subgraph objects.");
+
+    m.def("merge_subgraphs", [](const opf::Subgraph<float>& sg1, const opf::Subgraph<float>& sg2) {
+        return opf::Subgraph<float>::merge(sg1, sg2);
+    }, py::arg("subgraph1"), py::arg("subgraph2"),
+       "Merge two subgraphs with the same number of features into one.");
+
+    m.def("compute_distance_matrix", [](const opf::Subgraph<float>& sg, int distance_id) {
+        int n = sg.getNumNodes();
+        std::vector<std::vector<float>> mat(n, std::vector<float>(n, 0.0f));
+        for (int i = 0; i < n; ++i) {
+            for (int j = i + 1; j < n; ++j) {
+                const auto& fi = *sg.getNode(i).getFeat();
+                const auto& fj = *sg.getNode(j).getFeat();
+                float d = 0.0f;
+                switch (distance_id) {
+                    case 1: d = opf::distance::euclDist(fi, fj); break;
+                    case 2: d = opf::distance::chiSquaredDist(fi, fj); break;
+                    case 3: d = opf::distance::manhattanDist(fi, fj); break;
+                    case 4: d = opf::distance::canberraDist(fi, fj); break;
+                    case 5: d = opf::distance::squaredChordDist(fi, fj); break;
+                    case 6: d = opf::distance::squaredChiSquaredDist(fi, fj); break;
+                    case 7: d = opf::distance::brayCurtisDist(fi, fj); break;
+                    default: throw std::invalid_argument("Invalid distance_id (must be 1-7).");
+                }
+                mat[i][j] = d;
+                mat[j][i] = d;
+            }
+        }
+        return mat;
+    }, py::arg("subgraph"), py::arg("distance_id") = 1,
+       "Compute NxN pairwise distance matrix. distance_id: 1=Euclidean, 2=Chi-Square, 3=Manhattan, 4=Canberra, 5=SquaredChord, 6=SquaredChiSquared, 7=BrayCurtis.");
+
+    m.def("write_distance_matrix", [](const std::string& filename,
+                                      const opf::Subgraph<float>& sg,
+                                      int distance_id) {
+        int n = sg.getNumNodes();
+        std::vector<std::vector<float>> mat(n, std::vector<float>(n, 0.0f));
+        for (int i = 0; i < n; ++i) {
+            for (int j = i + 1; j < n; ++j) {
+                const auto& fi = *sg.getNode(i).getFeat();
+                const auto& fj = *sg.getNode(j).getFeat();
+                float d = 0.0f;
+                switch (distance_id) {
+                    case 1: d = opf::distance::euclDist(fi, fj); break;
+                    case 2: d = opf::distance::chiSquaredDist(fi, fj); break;
+                    case 3: d = opf::distance::manhattanDist(fi, fj); break;
+                    case 4: d = opf::distance::canberraDist(fi, fj); break;
+                    case 5: d = opf::distance::squaredChordDist(fi, fj); break;
+                    case 6: d = opf::distance::squaredChiSquaredDist(fi, fj); break;
+                    case 7: d = opf::distance::brayCurtisDist(fi, fj); break;
+                    default: throw std::invalid_argument("Invalid distance_id (must be 1-7).");
+                }
+                mat[i][j] = d;
+                mat[j][i] = d;
+            }
+        }
+        std::ofstream out(filename, std::ios::binary);
+        if (!out.is_open()) throw std::runtime_error("Cannot open file: " + filename);
+        out.write(reinterpret_cast<const char*>(&n), sizeof(int));
+        for (int i = 0; i < n; ++i)
+            out.write(reinterpret_cast<const char*>(mat[i].data()), n * sizeof(float));
+    }, py::arg("filename"), py::arg("subgraph"), py::arg("distance_id") = 1,
+       "Compute and write pairwise distance matrix to a binary file (int nnodes + float NxN).");
+
+    m.def("read_distance_matrix", [](const std::string& filename) {
+        std::ifstream in(filename, std::ios::binary);
+        if (!in.is_open()) throw std::runtime_error("Cannot open file: " + filename);
+        int n = 0;
+        in.read(reinterpret_cast<char*>(&n), sizeof(int));
+        std::vector<std::vector<float>> mat(n, std::vector<float>(n));
+        for (int i = 0; i < n; ++i)
+            in.read(reinterpret_cast<char*>(mat[i].data()), n * sizeof(float));
+        return mat;
+    }, py::arg("filename"),
+       "Read a precomputed distance matrix from a binary file. Returns list of lists of float.");
 }
