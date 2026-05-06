@@ -42,6 +42,7 @@ provides directly.  `opfppy` adds:
 | C++ compiler | GCC/Clang with C++20 (MSYS2 UCRT64 on Windows) |
 | CMake | ≥ 3.16 |
 | Conan | 2.x |
+| plyfile | ≥ 1.0 |
 
 ---
 
@@ -81,6 +82,7 @@ opfppy/
   subgraph.py          # Subgraph shim class — pretty repr, factory class-methods
   opf_class.py         # OPF shim class — pretty repr, wrap(), register()
   distance.py          # DistanceMetric enum, resolve(), register()
+  ply_adapter.py       # SplatSubGraph class, encode/decode SH, PLY loading
   utils.py             # I/O, split/merge/normalize, accuracy, distance matrix
   supervised.py        # train, classify, learn, prune helpers
   unsupervised.py      # cluster, knn_classify, semi_supervised helpers
@@ -91,6 +93,8 @@ examples/
   example4_normalization.py         # feature normalization + supervised OPF
   example5_unsupervised.py          # unsupervised clustering + k-NN classify
   example6_semi_supervised.py       # semi-supervised OPF
+  example7_ply_subgraph.py          # basic PLY → Subgraph conversion
+  example8_splat_subgraph.py        # advanced PLY → SplatSubGraph with metadata
 ```
 
 ---
@@ -127,6 +131,32 @@ All `opfpy` free functions are also re-exported directly from `opfppy`:
 
 ---
 
+### `opfppy.ply_adapter`
+
+| Symbol | Description |
+|--------|-------------|
+| `SplatSubGraph` | Subclass of `Subgraph` with persistent PLY metadata + import/export |
+| `from_ply_file(path, profile)` | Load Gaussian-splat PLY and return `(Subgraph, metadata)` dict |
+| `encode_sh_params(l, m)` | Pack SH `(l, m)` into one byte using offset convention |
+| `decode_sh_params(byte)` | Unpack byte back into `(l, m)` |
+
+**SH Encoding scheme** (3 bits degree + 5 bits index with offset):
+- Packing: `byte = (l << 5) | ((m + 16) & 0x1F)`
+- Unpacking: `l = (byte >> 5) & 0x07`, `m = (byte & 0x1F) - 16`
+- Valid range: l ∈ [0, 7], m ∈ [-16, 15]
+- Examples: f_dc_0 → 16 (00010000), f_rest_44 → 115 (01110011)
+
+**Profile options**:
+- `'full'`: All 62 Gaussian properties (x, y, z, nx, ny, nz, f_dc_*, f_rest_*, opacity, scale_*, rot_*)
+- `'compact'`: 14 essential properties (geometry + DC color + opacity + scale + rotation)
+
+**Benchmark results** (1000 vertices):
+| Metric | Full | Compact | Savings |
+|--------|------|---------|---------|
+| Load time | 98 ms | 55 ms | 44% faster |
+| Features per node | 62 | 14 | 77.4% reduction |
+| Access speed (500 nodes) | 4.23 ms | 2.90 ms | 1.46× faster |
+
 ### `opfppy.utils`
 
 | Function | Description |
@@ -140,6 +170,7 @@ All `opfpy` free functions are also re-exported directly from `opfppy`:
 | `normalize(sg)` | Z-score feature normalization **in-place** |
 | `accuracy(sg)` | Accuracy from `label` vs `truelabel` |
 | `info(sg)` | Dict with `nnodes`, `nlabels`, `nfeats` |
+| `load_ply(path, feature_profile)` | Load Gaussian-splat PLY into `(Subgraph, metadata)` |
 | `compute_distance_matrix(sg, distance)` | Pairwise distance matrix — accepts int / str / `DistanceMetric` |
 | `write_distance_matrix(mat, path)` | Write binary distance matrix |
 | `read_distance_matrix(path)` | Read binary distance matrix |
@@ -228,4 +259,18 @@ python examples/example3_precomputed_distances.py
 python examples/example4_normalization.py
 python examples/example5_unsupervised.py
 python examples/example6_semi_supervised.py
+python examples/example7_ply_subgraph.py ../../tools/bridge-server/sample.ply full
+python examples/example8_splat_subgraph.py ../../tools/bridge-server/sample.ply
 ```
+
+---
+
+## Running the Benchmarks
+
+```sh
+cd pythonlib
+# activate .venv first
+python -m unittest test_ply_benchmark.TestPlyBenchmark -v
+```
+
+Expected output: Performance comparison of full vs compact profiles on synthetic 1000-vertex PLY.

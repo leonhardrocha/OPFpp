@@ -2,3 +2,4 @@
 # Install with: python -m pip install -r requirements.txt
 
 conan>=2.0
+plyfile>=1.0

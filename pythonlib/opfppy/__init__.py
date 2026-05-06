@@ -70,6 +70,7 @@ from opfppy.opf_class import OPF
 # ---------------------------------------------------------------------------
 
 from opfppy.distance import DistanceMetric, resolve as resolve_distance, register as register_distance
+from opfppy.ply_adapter import encode_sh_params, decode_sh_params, from_ply_file, SplatSubGraph
 
 # ---------------------------------------------------------------------------
 # Re-export every free function from opfpy so callers never need to touch
@@ -102,7 +103,7 @@ from opfpy import (
 
 def __getattr__(name: str):
     submodules = ("supervised", "unsupervised", "utils", "distance",
-                  "node", "subgraph", "opf_class")
+                  "node", "subgraph", "opf_class", "ply_adapter")
     if name in submodules:
         return _imp(f"opfppy.{name}")
     raise AttributeError(f"module 'opfppy' has no attribute {name!r}")
@@ -113,6 +114,8 @@ __all__ = [
     "Node", "Subgraph", "OPF",
     # Distance helpers
     "DistanceMetric", "resolve_distance", "register_distance",
+    # PLY adapter helpers
+    "encode_sh_params", "decode_sh_params", "from_ply_file", "SplatSubGraph",
     # Free functions re-exported from opfpy
     "hello",
     "propagate_cluster_labels",
@@ -123,7 +126,7 @@ __all__ = [
     "compute_distance_matrix", "write_distance_matrix",
     # Sub-modules
     "supervised", "unsupervised", "utils",
-    "distance", "node", "subgraph", "opf_class",
+    "distance", "node", "subgraph", "opf_class", "ply_adapter",
     # Low-level extension (escape hatch)
     "_opfpy",
 ]
