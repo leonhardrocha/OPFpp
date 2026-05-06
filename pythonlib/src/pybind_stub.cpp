@@ -8,10 +8,13 @@
 #include "../include/opf/Subgraph.hpp"
 #include "../include/opf/file.hpp"
 #include "../../include_cpp/opf/Distance.hpp"
+#include "../../include_cpp/opf/Utils.hpp"
+#include "../../include_cpp/opf/OPF.hpp"
 
 namespace py = pybind11;
 using opf::Node;
 using opf::Subgraph;
+using opf::OPF;
 
 PYBIND11_MODULE(opfpy, m) {
     m.doc() = "OPF C++20 Python bindings";
@@ -75,6 +78,22 @@ PYBIND11_MODULE(opfpy, m) {
         }, py::arg("filename"), "Read a Subgraph from the original OPF binary file format.")
         ;
 
+    // Supervised OPF workflow class
+    py::class_<OPF<float>>(m, "OPF")
+        .def(py::init<>())
+        .def("train", &OPF<float>::training,
+            py::arg("train_subgraph"),
+            "Train a supervised OPF model in-place on the training subgraph.")
+        .def("classify", &OPF<float>::classifying,
+            py::arg("train_subgraph"), py::arg("test_subgraph"),
+            "Classify test_subgraph nodes in-place using a trained train_subgraph.")
+        .def("learn", &OPF<float>::learning,
+            py::arg("train_subgraph"), py::arg("eval_subgraph"), py::arg("n_iterations") = 10,
+            "Run iterative OPF learning in-place on train_subgraph using eval_subgraph.")
+        .def("accuracy", &OPF<float>::accuracy,
+            py::arg("subgraph"),
+            "Compute OPF accuracy from node labels vs. truelabels.");
+
     // Free functions: OPF training-format file I/O (truelabel/position/pathval/features)
     m.def("read_subgraph", [](const std::string& filename) {
         opf::Subgraph<float> sg;
@@ -87,6 +106,15 @@ PYBIND11_MODULE(opfpy, m) {
         opf::writeSubgraph<float>(filename, sg);
     }, py::arg("filename"), py::arg("subgraph"),
        "Write a Subgraph to the OPF training binary format.");
+
+    m.def("split_subgraph", [](const opf::Subgraph<float>& original, float percentage_first) {
+        opf::Subgraph<float> first;
+        opf::Subgraph<float> second;
+        opf::Subgraph<float> original_copy = original;
+        opf::split<float>(original_copy, first, second, percentage_first);
+        return py::make_tuple(first, second);
+    }, py::arg("original_subgraph"), py::arg("percentage_first"),
+       "Split a subgraph into two label-stratified subgraphs.");
 
     // Distance functions
     m.def("eucl_dist", &opf::distance::euclDist, "Euclidean distance between two float vectors");

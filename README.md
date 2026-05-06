@@ -341,6 +341,11 @@ cd build
 ctest
 ```
 
+## TODO
+
+- Fix bug in C/C++ OPF classifier accuracy if not all label are present in eval set (divides by zero -> nan)
+
+
 Individual test executables are located in `build/bin/test_*.exe`.
 
 ---
