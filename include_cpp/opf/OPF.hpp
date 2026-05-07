@@ -93,6 +93,34 @@ namespace opf {
             sg.getNode(i).setRelevant(1);
         }
 
+        // Classify eval nodes and mark the winning training node (conqueror) and its
+        // predecessor path as relevant.  Mirrors opf_OPFClassifyingAndMarkNodes.
+        void classifyingAndMarkNodes(Subgraph<T>& sg_train, Subgraph<T>& sg_eval) {
+            const auto& ordered_nodes = sg_train.getOrderedListOfNodes();
+            for (int i = 0; i < sg_eval.getNumNodes(); ++i) {
+                float min_cost = std::numeric_limits<float>::max();
+                int conqueror = -1;
+
+                for (int node_idx : ordered_nodes) {
+                    const auto& train_node = sg_train.getNode(node_idx);
+                    if (min_cost <= train_node.getPathval()) break;
+
+                    float weight = distance::euclDist(*train_node.getFeat(), *sg_eval.getNode(i).getFeat());
+                    float cost = std::max(train_node.getPathval(), weight);
+
+                    if (cost < min_cost) {
+                        min_cost = cost;
+                        sg_eval.getNode(i).setLabel(train_node.getLabel());
+                        conqueror = node_idx;
+                    }
+                }
+
+                if (conqueror != -1) {
+                    markNodes(sg_train, conqueror);
+                }
+            }
+        }
+
         void removeIrrelevantNodes(Subgraph<T>& sg) {
             std::vector<Node<T>> relevant_nodes;
             for(int i = 0; i < sg.getNumNodes(); ++i) {
@@ -224,7 +252,12 @@ namespace opf {
             for (int i = 1; i <= nlabels; ++i) {
                 if (nclass[i] != 0) {
                     error_matrix[i][1] /= (float)nclass[i];  // normalize FN by true positives
-                    error_matrix[i][0] /= (float)(nnodes - nclass[i]);  // normalize FP by negatives
+                    int negatives = nnodes - nclass[i];
+                    // Guard: if this label owns ALL nodes there are no negatives,
+                    // so FP rate is defined as 0 (nothing could be falsely flagged).
+                    error_matrix[i][0] = (negatives > 0)
+                        ? error_matrix[i][0] / (float)negatives
+                        : 0.0f;
                     nlabels_with_samples++;
                 }
             }
@@ -335,28 +368,39 @@ namespace opf {
         }
 
         float pruning(Subgraph<T>& sg_train, Subgraph<T>& sg_eval, float desired_acc) {
-            float acc = 1.0;
-            int initial_size = sg_train.getNumNodes();
+            const int max_iterations = 100;
+            const int initial_size = sg_train.getNumNodes();
+            int t = 1;
 
+            // Initial train + evaluate
             training(sg_train);
             classifying(sg_train, sg_eval);
-            acc = accuracy(sg_eval);
+            float current_acc = accuracy(sg_eval);
+            float old_acc = current_acc;
 
-            while(acc >= desired_acc) {
-                // Mark relevant nodes
-                for(int i = 0; i < sg_train.getNumNodes(); ++i) sg_train.getNode(i).setRelevant(0);
-                for(int i = 0; i < sg_eval.getNumNodes(); ++i) {
-                    if (sg_eval.getNode(i).getLabel() == sg_eval.getNode(i).getTruelabel()) {
-                        markNodes(sg_train, sg_eval.getNode(i).getPred());
-                    }
+            // Loop while accuracy change stays within the tolerance.
+            // Mirrors opf_OPFPruning: desiredAcc is a *tolerance*, not a floor.
+            while (t <= max_iterations && std::fabs(current_acc - old_acc) <= desired_acc) {
+                old_acc = current_acc;
+
+                // Reset relevant flag and predecessor for all training nodes
+                for (int i = 0; i < sg_train.getNumNodes(); ++i) {
+                    sg_train.getNode(i).setRelevant(0);
+                    sg_train.getNode(i).setPred(-1);
                 }
+
+                training(sg_train);
+                classifyingAndMarkNodes(sg_train, sg_eval);
                 removeIrrelevantNodes(sg_train);
+
+                // Re-train on pruned set, then re-evaluate
                 training(sg_train);
                 classifying(sg_train, sg_eval);
-                acc = accuracy(sg_eval);
+                current_acc = accuracy(sg_eval);
+                ++t;
             }
 
-            return (1.0f - (float)sg_train.getNumNodes() / initial_size);
+            return 1.0f - (float)sg_train.getNumNodes() / (float)initial_size;
         }
         
         Subgraph<T> semiSupervisedLearning(Subgraph<T>& sg_labeled, Subgraph<T>& sg_unlabeled, Subgraph<T>* sg_eval) {
