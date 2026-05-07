@@ -76,6 +76,7 @@ cd pythonlib
 python -m unittest -v test_opfpy_bindings.py
 python -m unittest -v test_opfpy_cython.py
 python -m unittest -v test_opfpy_distance.py
+The resulting `opfpy.pyd` will be in `pythonlib/bin`.
 ```
 
 The test files automatically add `pythonlib/bin` to `sys.path` and register the UCRT64 DLL directories via `windows_runtime_helper.py`, so no manual `PYTHONPATH` setup is needed.
