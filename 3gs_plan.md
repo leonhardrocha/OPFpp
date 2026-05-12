@@ -171,3 +171,14 @@ Valor absoluto com sinal: Reservar 1 bit para o sinal (+/-) e 4 para o valor.
 Offset (Nossa sugestão): Somar um valor fixo (ex: 16) para que todos os m fiquem entre 0 e 31.
 
 Índice Linear: Apenas guardar a posição sequencial do coeficiente dentro daquele grau $l$.
+
+## Exemplos de codificação SH (3 bits de grau + 5 bits de m com offset)
+
+Regra de packing: byte = (l << 5) | ((m + 16) & 31).
+Regra de unpacking: l = (byte >> 5) & 7 e m = (byte & 31) - 16.
+Exemplo A: l=0, m=0 -> m_encoded=16 -> byte decimal 16 -> binário 00010000.
+Exemplo B: l=1, m=-1 -> m_encoded=15 -> byte decimal 47 -> binário 00101111.
+Exemplo C: l=2, m=2 -> m_encoded=18 -> byte decimal 82 -> binário 01010010.
+Exemplo D: l=3, m=3 -> m_encoded=19 -> byte decimal 115 -> binário 01110011.
+Limites válidos: l em [0,7] e m em [-16,15] antes do offset.
+Regra de erro: se l ou m sair da faixa, lançar ValueError e interromper a geração do subgraph.

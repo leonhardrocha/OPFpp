@@ -33,7 +33,7 @@ def _make_subgraph(samples, nfeats=2, nlabels=0):
 
 class TestClustering(unittest.TestCase):
     def _make_clusterable(self):
-        """Two tight clusters with dens + full adjacency (as opf_cluster does)."""
+        """Two tight clusters prepared by native kNN arc+PDF routines."""
         samples = [
             ([0.0, 0.0], 0),
             ([0.1, 0.1], 0),
@@ -41,23 +41,9 @@ class TestClustering(unittest.TestCase):
             ([10.1, 9.9], 0),
         ]
         sg = _make_subgraph(samples, nfeats=2, nlabels=0)
-        # Assign density inversely proportional to inter-node distance
-        # (closer nodes = higher density), and full adjacency
-        import math
-        n = sg.nnodes
-        for i in range(n):
-            fi = sg.get_node(i).feat
-            min_d = float('inf')
-            for j in range(n):
-                if i != j:
-                    fj = sg.get_node(j).feat
-                    d = math.sqrt(sum((a - b) ** 2 for a, b in zip(fi, fj)))
-                    min_d = min(min_d, d)
-            sg.get_node(i).dens = 1.0 / (1.0 + min_d)
-            sg.get_node(i).pathval = sg.get_node(i).dens
-            for j in range(n):
-                if i != j:
-                    sg.get_node(i).add_to_adj(j)
+        clf = opfpy.OPF()
+        clf.create_arcs(sg, 2)
+        clf.compute_pdf(sg)
         return sg
 
     def test_cluster_assigns_labels(self):

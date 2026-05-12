@@ -6,7 +6,7 @@
 #include "opf_test_config.h"
 #include "opf_test_api.h"
 
-// Helper functions moved to tests_cpp/opf_test_api.h
+// Helper functions moved to tests/opf_test_api.h
 
 int main() {
     // This test replicates the steps in examples/example6.sh

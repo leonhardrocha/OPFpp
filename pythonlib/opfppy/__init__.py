@@ -71,6 +71,7 @@ from opfppy.opf_class import OPF
 
 from opfppy.distance import DistanceMetric, resolve as resolve_distance, register as register_distance
 from opfppy.ply_adapter import encode_sh_params, decode_sh_params, from_ply_file, SplatSubGraph
+from opfppy.colormap import label_rgb, build_palette, labels_to_rgb_array, load_colormap
 
 # ---------------------------------------------------------------------------
 # Re-export every free function from opfpy so callers never need to touch

@@ -1,74 +1,31 @@
 #include <opf/Distance.hpp>
-#include <numeric>
-#include <cmath>
-#include <algorithm>
+
+// Distance functions are now fully templated in Distance.hpp (header-only).
+// Explicit instantiations below for float and double are compiled into this translation unit
+// to ensure these specializations are always available and linked correctly.
 
 namespace opf {
     namespace distance {
+        // Explicit template instantiations for float
+        template float euclDist<float>(const std::vector<float>&, const std::vector<float>&);
+        template float euclDistLog<float>(const std::vector<float>&, const std::vector<float>&);
+        template float gaussDist<float>(const std::vector<float>&, const std::vector<float>&, float);
+        template float chiSquaredDist<float>(const std::vector<float>&, const std::vector<float>&);
+        template float manhattanDist<float>(const std::vector<float>&, const std::vector<float>&);
+        template float canberraDist<float>(const std::vector<float>&, const std::vector<float>&);
+        template float squaredChordDist<float>(const std::vector<float>&, const std::vector<float>&);
+        template float squaredChiSquaredDist<float>(const std::vector<float>&, const std::vector<float>&);
+        template float brayCurtisDist<float>(const std::vector<float>&, const std::vector<float>&);
 
-        float euclDist(const std::vector<float>& f1, const std::vector<float>& f2) {
-            float dist = 0.0f;
-            for (size_t i = 0; i < f1.size(); ++i) {
-                dist += (f1[i] - f2[i]) * (f1[i] - f2[i]);
-            }
-            return std::sqrt(dist);
-        }
-
-        float chiSquaredDist(const std::vector<float>& f1, const std::vector<float>& f2) {
-            float dist = 0.0f;
-            for (size_t i = 0; i < f1.size(); ++i) {
-                if ((f1[i] + f2[i]) > 0) {
-                    dist += ((f1[i] - f2[i]) * (f1[i] - f2[i])) / (f1[i] + f2[i]);
-                }
-            }
-            return dist;
-        }
-
-        float manhattanDist(const std::vector<float>& f1, const std::vector<float>& f2) {
-            float dist = 0.0f;
-            for (size_t i = 0; i < f1.size(); ++i) {
-                dist += std::abs(f1[i] - f2[i]);
-            }
-            return dist;
-        }
-
-        float canberraDist(const std::vector<float>& f1, const std::vector<float>& f2) {
-            float dist = 0.0f;
-            for (size_t i = 0; i < f1.size(); ++i) {
-                if ((f1[i] + f2[i]) > 0) {
-                    dist += std::abs(f1[i] - f2[i]) / (std::abs(f1[i]) + std::abs(f2[i]));
-                }
-            }
-            return dist;
-        }
-
-        float squaredChordDist(const std::vector<float>& f1, const std::vector<float>& f2) {
-            float dist = 0.0f;
-            for (size_t i = 0; i < f1.size(); ++i) {
-                dist += (std::sqrt(f1[i]) - std::sqrt(f2[i])) * (std::sqrt(f1[i]) - std::sqrt(f2[i]));
-            }
-            return dist;
-        }
-
-        float squaredChiSquaredDist(const std::vector<float>& f1, const std::vector<float>& f2) {
-            float dist = 0.0f;
-            for (size_t i = 0; i < f1.size(); ++i) {
-                if ((f1[i] + f2[i]) > 0) {
-                    dist += ((f1[i] - f2[i]) * (f1[i] - f2[i])) / (f1[i] + f2[i]);
-                }
-            }
-            return dist;
-        }
-
-        float brayCurtisDist(const std::vector<float>& f1, const std::vector<float>& f2) {
-            float num = 0.0f;
-            float den = 0.0f;
-            for (size_t i = 0; i < f1.size(); ++i) {
-                num += std::abs(f1[i] - f2[i]);
-                den += (f1[i] + f2[i]);
-            }
-            return (den > 0) ? (num / den) : 0.0f;
-        }
-
+        // Explicit template instantiations for double
+        template double euclDist<double>(const std::vector<double>&, const std::vector<double>&);
+        template double euclDistLog<double>(const std::vector<double>&, const std::vector<double>&);
+        template double gaussDist<double>(const std::vector<double>&, const std::vector<double>&, double);
+        template double chiSquaredDist<double>(const std::vector<double>&, const std::vector<double>&);
+        template double manhattanDist<double>(const std::vector<double>&, const std::vector<double>&);
+        template double canberraDist<double>(const std::vector<double>&, const std::vector<double>&);
+        template double squaredChordDist<double>(const std::vector<double>&, const std::vector<double>&);
+        template double squaredChiSquaredDist<double>(const std::vector<double>&, const std::vector<double>&);
+        template double brayCurtisDist<double>(const std::vector<double>&, const std::vector<double>&);
     } // namespace distance
 } // namespace opf

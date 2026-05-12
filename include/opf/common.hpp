@@ -40,8 +40,7 @@ constexpr double Epsilon = 1E-05;
 
 // Error and Warning functions
 inline void Error(const char* msg, const char* func) {
-    fprintf(stderr, "Error in %s: %s\n", func, msg);
-    throw std::runtime_error(msg);
+    throw std::runtime_error(std::string(func) + ": " + msg);
 }
 
 inline void Warning(const char* msg, const char* func) {

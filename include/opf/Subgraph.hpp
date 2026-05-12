@@ -29,8 +29,9 @@ namespace opf {
         float getMaxDens() const { return maxdens; }
         float getK() const { return K; }
         const std::vector<Node<T>>& getNodes() const { return nodes; }
-        Node<T>& getNode(int index) { return nodes[index]; }
+        std::vector<Node<T>>& getNodes() { return nodes; }
         const Node<T>& getNode(int index) const { return nodes[index]; }
+        Node<T>& getNode(int index) { return nodes[index]; }
         const std::vector<int>& getOrderedListOfNodes() const { return ordered_list_of_nodes; }
 
         // Setters

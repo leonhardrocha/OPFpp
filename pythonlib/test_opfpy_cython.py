@@ -175,6 +175,25 @@ class TestCythonFreeFunctions(unittest.TestCase):
             if os.path.exists(tmpfile):
                 os.remove(tmpfile)
 
+
+class TestCythonOPF(unittest.TestCase):
+    def test_native_unsupervised_pipeline_methods(self):
+        sg = cy.Subgraph(4)
+        sg.nfeats = 2
+        for i, feat in enumerate(([0.0, 0.0], [0.1, 0.1], [10.0, 10.0], [10.2, 9.9])):
+            n = sg.get_node(i)
+            n.feat = list(feat)
+            n.position = i
+
+        clf = cy.OPF()
+        clf.create_arcs(sg, 2)
+        clf.compute_pdf(sg)
+        clf.cluster(sg)
+
+        self.assertGreater(sg.nlabels, 0)
+        self.assertGreater(sg.get_node(0).radius, 0.0)
+        self.assertGreater(sg.get_node(0).dens, 0.0)
+
     def test_write_cy_subgraph(self):
         """write_subgraph accepts a cy.Subgraph as well as opfpy.Subgraph."""
         sg = cy.Subgraph(1)

@@ -198,6 +198,9 @@ Aliases: `l1` → manhattan, `l2` → euclidean, `chi2` → chi_squared, `bray` 
 | Function | Description |
 |----------|-------------|
 | `cluster_and_propagate(sg, k)` | Cluster in-place and propagate labels |
+| `create_arcs(sg, k)` | Build k-NN adjacency + node radius in native C++ (`opf_CreateArcs`) |
+| `compute_pdf(sg)` | Compute Gaussian PDF density on a subgraph with adjacency set (`opf_PDF`) |
+| `bestk_min_cut(sg, kmin, kmax)` | Run native best-k selection (`opf_BestkMinCut`) then prepare arcs/PDF |
 | `knn_classify(sg_train, sg_test)` | k-NN classify using stored radii |
 | `semi_supervised(labeled, unlabeled, eval?)` | Semi-supervised learning; returns merged graph |
 
@@ -224,7 +227,7 @@ need the raw C-extension objects for performance-critical inner loops.
 |--------|------|-------------|
 | `Node` | class | Single graph node with all OPF fields |
 | `Subgraph` | class | Container of nodes + graph metadata |
-| `OPF` | class | Classifier / learner methods |
+| `OPF` | class | Classifier / learner methods (`train`, `classify`, `learn`, `create_arcs`, `destroy_arcs`, `bestk_min_cut`, `compute_pdf`, `cluster`, `knn_classify`, `semi_supervised`, `normalize`, `accuracy`, `pruning`) |
 | `read_subgraph` / `write_subgraph` | functions | Binary I/O |
 | `split_subgraph` | function | Stratified split |
 | `propagate_cluster_labels` | function | Label propagation |
@@ -245,7 +248,7 @@ cd pythonlib
 python -m unittest discover -v
 ```
 
-Expected: **70 tests, OK** across Phases 1–6.
+Expected: **80 tests, OK** across Phases 1–6 plus PLY adapter tests.
 
 ---
 

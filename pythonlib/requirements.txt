@@ -3,3 +3,4 @@
 
 conan>=2.0
 plyfile>=1.0
+colorcet>=3.0

@@ -11,18 +11,10 @@ int opf_cluster_run(const std::string &dataset) {
         auto subgraph = opf::ReadSubgraph_original<float>(dataset.c_str());
         std::cout << "Subgraph read successfully." << std::endl;
 
-        // --- Placeholder for opf_BestkMinCut logic ---
-        std::cout << "Running placeholder for BestKMinCut..." << std::endl;
-        for (int i = 0; i < subgraph.getNumNodes(); ++i) {
-            subgraph.getNode(i).setDens(static_cast<float>(rand()) / RAND_MAX);
-            for (int j = 0; j < subgraph.getNumNodes(); ++j) {
-                if (i != j) {
-                    subgraph.getNode(i).addToAdj(j);
-                }
-            }
-        }
-
+        std::cout << "Computing best k via normalised cut (kmin=1, kmax=10)..." << std::endl;
         opf::OPF<float> opf_classifier;
+        opf_classifier.bestkMinCut(subgraph, 1, 10);
+        std::cout << "Best k selected: " << subgraph.getBestK() << std::endl;
 
         std::cout << "Clustering..." << std::endl;
         opf_classifier.clustering(subgraph);
