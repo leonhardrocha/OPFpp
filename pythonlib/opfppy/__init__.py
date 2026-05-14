@@ -25,7 +25,6 @@ Quick-start
 
 import os
 import sys
-from importlib import import_module as _imp
 
 # ---------------------------------------------------------------------------
 # Bootstrap: ensure the built extension (.pyd / .so) and helpers are findable
@@ -70,7 +69,7 @@ from opfppy.opf_class import OPF
 # ---------------------------------------------------------------------------
 
 from opfppy.distance import DistanceMetric, resolve as resolve_distance, register as register_distance
-from opfppy.ply_adapter import encode_sh_params, decode_sh_params, from_ply_file, SplatSubGraph
+from opfppy.ply_adapter import encode_sh_params, decode_sh_params, subgraph_from_ply_file, SplatSubGraph
 from opfppy.colormap import label_rgb, build_palette, labels_to_rgb_array, load_colormap
 
 # ---------------------------------------------------------------------------
@@ -78,36 +77,9 @@ from opfppy.colormap import label_rgb, build_palette, labels_to_rgb_array, load_
 # the low-level extension directly.
 # ---------------------------------------------------------------------------
 
-from opfpy import (
-    hello,
-    propagate_cluster_labels,
-    read_subgraph,
-    write_subgraph,
-    split_subgraph,
-    eucl_dist,
-    chi_squared_dist,
-    manhattan_dist,
-    canberra_dist,
-    squared_chord_dist,
-    squared_chi_squared_dist,
-    bray_curtis_dist,
-    subgraph_info,
-    k_fold,
-    merge_subgraphs,
-    compute_distance_matrix,
-    write_distance_matrix,
-)
 
-# ---------------------------------------------------------------------------
-# Lazy sub-module access
-# ---------------------------------------------------------------------------
-
-def __getattr__(name: str):
-    submodules = ("supervised", "unsupervised", "utils", "distance",
-                  "node", "subgraph", "opf_class", "ply_adapter")
-    if name in submodules:
-        return _imp(f"opfppy.{name}")
-    raise AttributeError(f"module 'opfppy' has no attribute {name!r}")
+# Explicitly export convenience submodules.
+from opfppy import supervised, unsupervised, utils, distance, node, subgraph, opf_class, ply_adapter, colormap
 
 
 __all__ = [
@@ -116,7 +88,9 @@ __all__ = [
     # Distance helpers
     "DistanceMetric", "resolve_distance", "register_distance",
     # PLY adapter helpers
-    "encode_sh_params", "decode_sh_params", "from_ply_file", "SplatSubGraph",
+    "encode_sh_params", "decode_sh_params", "subgraph_from_ply_file", "SplatSubGraph",
+    # Colormap helpers
+    "label_rgb", "build_palette", "labels_to_rgb_array", "load_colormap",
     # Free functions re-exported from opfpy
     "hello",
     "propagate_cluster_labels",
@@ -127,7 +101,7 @@ __all__ = [
     "compute_distance_matrix", "write_distance_matrix",
     # Sub-modules
     "supervised", "unsupervised", "utils",
-    "distance", "node", "subgraph", "opf_class", "ply_adapter",
+    "distance", "node", "subgraph", "opf_class", "ply_adapter", "colormap",
     # Low-level extension (escape hatch)
     "_opfpy",
 ]

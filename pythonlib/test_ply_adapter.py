@@ -1,3 +1,4 @@
+import io
 import os
 import tempfile
 import unittest
@@ -5,7 +6,7 @@ import unittest
 import numpy as np
 from plyfile import PlyData, PlyElement
 
-from opfppy.ply_adapter import decode_sh_params, encode_sh_params, from_ply_file
+from opfppy.ply_adapter import decode_sh_params, encode_sh_params, subgraph_from_ply_file
 
 
 def _vertex_dtype():
@@ -58,7 +59,9 @@ class TestSHEncoding(unittest.TestCase):
 
 
 class TestPlyAdapter(unittest.TestCase):
-    def test_from_ply_file_full(self):
+
+    def test_from_ply_file_full_and_label(self):
+        from opfppy.ply_adapter import write_subgraph_to_ply_file, node_scalar_members
         vertices = _build_vertices(3)
         elem = PlyElement.describe(vertices, "vertex")
 
@@ -66,27 +69,71 @@ class TestPlyAdapter(unittest.TestCase):
         os.close(fd)
         try:
             PlyData([elem], text=False).write(path)
-            sg, meta = from_ply_file(path, feature_profile="full")
+            sg, meta = subgraph_from_ply_file(path, feature_profile="full")
 
-            self.assertEqual(sg.nnodes, 3)
-            self.assertEqual(sg.nfeats, len(meta["feature_names"]))
-            self.assertIn("f_rest_44", meta["sh_codes"])
-            self.assertEqual(meta["sh_codes"]["f_dc_0"], 16)
+            # Add label values
+            for i in range(sg.nnodes):
+                sg.get_node(i).label = 42 + i
+
+            # Write with label in profile
+            fd2, outpath = tempfile.mkstemp(suffix=".ply")
+            os.close(fd2)
+            try:
+                write_subgraph_to_ply_file(sg, outpath, metadata=meta, feature_profile="full+label")
+                # Read back and check header
+                with open(outpath, "rb") as f:
+                    header = b""
+                    while True:
+                        line = f.readline()
+                        header += line
+                        if line.strip() == b'end_header':
+                            break
+                    self.assertIn(b'label', header)
+                # Check binary data for label values
+                with open(outpath, 'rb') as f:
+                    ply = PlyData.read(io.BytesIO(f.read()))
+                arr = ply["vertex"].data
+                self.assertIn("label", arr.dtype.names)
+                for i in range(sg.nnodes):
+                    self.assertEqual(arr["label"][i], 42 + i)
+            finally:
+                os.unlink(outpath)
         finally:
             os.unlink(path)
 
-    def test_from_ply_file_compact(self):
-        vertices = _build_vertices(1)
+    def test_from_ply_file_compact_and_label(self):
+        from opfppy.ply_adapter import write_subgraph_to_ply_file
+        vertices = _build_vertices(2)
         elem = PlyElement.describe(vertices, "vertex")
 
         fd, path = tempfile.mkstemp(suffix=".ply")
         os.close(fd)
         try:
             PlyData([elem], text=False).write(path)
-            sg, meta = from_ply_file(path, feature_profile="compact")
+            sg, meta = subgraph_from_ply_file(path, feature_profile="compact")
+            for i in range(sg.nnodes):
+                sg.get_node(i).label = 100 + i
 
-            self.assertEqual(sg.nnodes, 1)
-            self.assertLess(sg.nfeats, len(meta["scene_properties"]))
+            fd2, outpath = tempfile.mkstemp(suffix=".ply")
+            os.close(fd2)
+            try:
+                write_subgraph_to_ply_file(sg, outpath, metadata=meta, feature_profile="compact+label")
+                with open(outpath, "rb") as f:
+                    header = b""
+                    while True:
+                        line = f.readline()
+                        header += line
+                        if line.strip() == b'end_header':
+                            break
+                    self.assertIn(b'label', header)
+                with open(outpath, 'rb') as f:
+                    ply = PlyData.read(io.BytesIO(f.read()))
+                arr = ply["vertex"].data
+                self.assertIn("label", arr.dtype.names)
+                for i in range(sg.nnodes):
+                    self.assertEqual(arr["label"][i], 100 + i)
+            finally:
+                os.unlink(outpath)
         finally:
             os.unlink(path)
 

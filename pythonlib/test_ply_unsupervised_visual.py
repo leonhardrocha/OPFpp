@@ -29,7 +29,8 @@ def _parse_visual_args(
     default_colormap_mode: str = "round-robin",
     default_colormap_source: str = "glasbey_hv",
     default_legend_format: str = "json",
-) -> tuple[float, str, str, str]:
+    default_render_mode: str = "blend",
+) -> tuple[float, str, str, str, str]:
     parser = argparse.ArgumentParser(add_help=False)
     parser.add_argument(
         "--blend-ratio",
@@ -58,6 +59,12 @@ def _parse_visual_args(
         default=default_legend_format,
         help="Legend sidecar format: json (default), csv, txt, or none.",
     )
+    parser.add_argument(
+        "--render-mode",
+        type=str,
+        default=default_render_mode,
+        help="Color rendering mode: blend (default) or label-only.",
+    )
     # Parse and remove custom args so unittest itself won't reject them.
     args, remaining = parser.parse_known_args()
     sys.argv = [sys.argv[0], *remaining]
@@ -69,10 +76,15 @@ def _parse_visual_args(
         raise ValueError(
             f"--legend-format must be one of json/csv/txt/none, got {args.legend_format}"
         )
-    return blend_ratio, args.colormap_mode, args.colormap_source, legend_format
+    render_mode = str(args.render_mode).strip().lower()
+    if render_mode not in {"blend", "label-only"}:
+        raise ValueError(
+            f"--render-mode must be one of blend/label-only, got {args.render_mode}"
+        )
+    return blend_ratio, args.colormap_mode, args.colormap_source, legend_format, render_mode
 
 
-_BLEND_RATIO, _COLORMAP_MODE, _COLORMAP_SOURCE, _LEGEND_FORMAT = _parse_visual_args()
+_BLEND_RATIO, _COLORMAP_MODE, _COLORMAP_SOURCE, _LEGEND_FORMAT, _RENDER_MODE = _parse_visual_args()
 _COLORMAP = load_colormap(_COLORMAP_SOURCE)
 
 
@@ -122,44 +134,19 @@ def _base_rgb(vertices: np.ndarray) -> np.ndarray:
     return np.full((len(vertices), 3), 127.0, dtype=np.float32)
 
 
-def _write_colorized_ply(src_ply: str, labels: list[int], dst_ply: str, blend_ratio: float = _BLEND_RATIO) -> None:
-    ply = PlyData.read(src_ply)
-    vertex_elem = ply["vertex"]
-    vertices = vertex_elem.data
 
-    if len(labels) != len(vertices):
-        raise ValueError("labels length must match number of vertices")
-
-    base = _base_rgb(vertices)
-    ramp = labels_to_rgb_array(labels, mode=_COLORMAP_MODE, cmap=_COLORMAP)
-    mixed = np.clip((1.0 - blend_ratio) * base + blend_ratio * ramp, 0.0, 255.0).astype(np.uint8)
-
-    names = list(vertices.dtype.names or [])
-    has_rgb = all(ch in names for ch in ("red", "green", "blue"))
-
-    if has_rgb:
-        out_vertices = vertices.copy()
-        out_vertices["red"] = mixed[:, 0]
-        out_vertices["green"] = mixed[:, 1]
-        out_vertices["blue"] = mixed[:, 2]
-    else:
-        new_descr = list(vertices.dtype.descr) + [("red", "u1"), ("green", "u1"), ("blue", "u1")]
-        out_vertices = np.empty(len(vertices), dtype=np.dtype(new_descr))
-        for name in names:
-            out_vertices[name] = vertices[name]
-        out_vertices["red"] = mixed[:, 0]
-        out_vertices["green"] = mixed[:, 1]
-        out_vertices["blue"] = mixed[:, 2]
-
-    out_elements = []
-    for elem in ply.elements:
-        if elem.name == "vertex":
-            out_elements.append(PlyElement.describe(out_vertices, "vertex"))
-        else:
-            out_elements.append(PlyElement.describe(elem.data, elem.name))
-
-    out = PlyData(out_elements, text=ply.text, byte_order=ply.byte_order)
-    out.write(dst_ply)
+# Write a PLY file using write_subgraph_to_ply_file, with label and regular properties, no color blending.
+def _write_label_ply(
+    src_ply: str,
+    labels: list[int],
+    dst_ply: str,
+    feature_profile: str = "full",
+) -> None:
+    from opfppy.ply_adapter import write_subgraph_to_ply_file, subgraph_from_ply_file
+    sg, metadata = subgraph_from_ply_file(src_ply, feature_profile=feature_profile)
+    for i in range(sg.nnodes):
+        sg.get_node(i).label = labels[i] if i < len(labels) else 0
+    write_subgraph_to_ply_file(sg, dst_ply, metadata=metadata, feature_profile=feature_profile + "+label")
 
 
 def _write_label_legend(labels: list[int], dst_ply: str) -> str | None:
@@ -267,7 +254,7 @@ def _sanity_check_random_splats(
 
 
 class TestPlyUnsupervisedVisual(unittest.TestCase):
-    def test_cluster_and_colorize_full_and_compact(self):
+    def test_cluster_and_colorize_full_and_compact(self, train_size: int | None = 300, sample_size: int = 30) -> None:
         if not os.path.isfile(_SAMPLE_PLY):
             self.skipTest(f"Sample PLY not found: {_SAMPLE_PLY}")
 
@@ -277,7 +264,7 @@ class TestPlyUnsupervisedVisual(unittest.TestCase):
             source = SplatSubGraph.from_ply_file(_SAMPLE_PLY, feature_profile=profile)
 
             # Train clustering model on a subset to keep test runtime bounded.
-            train = _copy_nodes(source, count=300)
+            train = _copy_nodes(source, count=train_size)
             clf = opfpy.OPF()
             # Native LibOPF pipeline (C -> C++ port -> pybind):
             #   opf_BestkMinCut -> createArcs + PDF, then opf_OPFClustering.
@@ -285,7 +272,7 @@ class TestPlyUnsupervisedVisual(unittest.TestCase):
             clf.cluster(train)
 
             # Random sample sanity checks for splat properties + native OPF fields.
-            _sanity_check_random_splats(source, train, sample_size=300, seed=1337)
+            _sanity_check_random_splats(source, train, sample_size=sample_size, seed=42)
 
             for i in range(train.nnodes):
                 node = train.get_node(i)
@@ -325,10 +312,62 @@ class TestPlyUnsupervisedVisual(unittest.TestCase):
             print(
                 f"[{profile}] visual output: {out_path} "
                 f"(blend_ratio={_BLEND_RATIO:.2f}, "
+                f"render_mode={_RENDER_MODE}, "
                 f"colormap_mode={_COLORMAP_MODE}, "
                 f"colormap_source={_COLORMAP_SOURCE}, "
                 f"legend_format={_LEGEND_FORMAT})"
             )
+
+
+    def test_write_label_ply_both_profiles(self) -> None:
+        """Write PLY with '+label' suffix for both profiles and sanity-check the output."""
+        import io
+        if not os.path.isfile(_SAMPLE_PLY):
+            self.skipTest(f"Sample PLY not found: {_SAMPLE_PLY}")
+
+        os.makedirs(_OUTPUT_DIR, exist_ok=True)
+
+        for profile in ("full", "compact"):
+            source = SplatSubGraph.from_ply_file(_SAMPLE_PLY, feature_profile=profile)
+            n = source.nnodes
+
+            # Assign cycling labels 1..5
+            labels = [(i % 5) + 1 for i in range(n)]
+
+            out_path = os.path.join(_OUTPUT_DIR, f"sample_label_only_{profile}.ply")
+            _write_label_ply(_SAMPLE_PLY, labels, out_path, feature_profile=profile)
+
+            # File must exist and be kept
+            self.assertTrue(os.path.isfile(out_path), f"Output PLY not created: {out_path}")
+
+            # Check PLY header contains 'label'
+            with open(out_path, "rb") as f:
+                header = b""
+                while True:
+                    line = f.readline()
+                    header += line
+                    if line.strip() == b"end_header":
+                        break
+            self.assertIn(b"label", header, f"[{profile}] 'label' not found in PLY header")
+
+            # Check binary data: label field present and values match
+            with open(out_path, "rb") as f:
+                ply = PlyData.read(io.BytesIO(f.read()))
+            arr = ply["vertex"].data
+            self.assertIn("label", arr.dtype.names, f"[{profile}] 'label' column missing in vertex data")
+            self.assertEqual(len(arr), n, f"[{profile}] vertex count mismatch")
+            for i in range(n):
+                self.assertEqual(
+                    int(arr["label"][i]), labels[i],
+                    f"[{profile}] label mismatch at node {i}: got {arr['label'][i]}, expected {labels[i]}"
+                )
+
+            # Check that feature columns are present
+            expected_features = source.metadata.get("feature_names", [])
+            for feat in expected_features[:5]:  # spot-check first 5 features
+                self.assertIn(feat, arr.dtype.names, f"[{profile}] feature '{feat}' missing from PLY")
+
+            print(f"[{profile}+label] output kept: {out_path} ({n} nodes, {len(arr.dtype.names)} columns)")
 
 
 if __name__ == "__main__":

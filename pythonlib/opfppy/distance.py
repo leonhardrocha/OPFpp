@@ -20,8 +20,9 @@ id already implemented at the C++ layer::
 
 from __future__ import annotations
 
+from array import array
 from enum import IntEnum
-from typing import Union
+from typing import Any, Callable, Union
 
 
 class DistanceMetric(IntEnum):
@@ -73,6 +74,102 @@ for _alias, _target in _ALIASES.items():
 # ---------------------------------------------------------------------------
 
 DistanceSpec = Union[int, str, DistanceMetric]
+
+
+_DISTANCE_FN_BY_ID: dict[int, str] = {
+    int(DistanceMetric.EUCLIDEAN): "eucl_dist",
+    int(DistanceMetric.CHI_SQUARED): "chi_squared_dist",
+    int(DistanceMetric.MANHATTAN): "manhattan_dist",
+    int(DistanceMetric.CANBERRA): "canberra_dist",
+    int(DistanceMetric.SQUARED_CHORD): "squared_chord_dist",
+    int(DistanceMetric.SQUARED_CHI_SQUARED): "squared_chi_squared_dist",
+    int(DistanceMetric.BRAY_CURTIS): "bray_curtis_dist",
+}
+
+
+def _detect_precision(features_a: Any, features_b: Any) -> str:
+    """Infer target precision from runtime feature containers.
+
+    Returns "double" when either input explicitly carries double precision
+    metadata; otherwise returns "float" for backward compatibility.
+    """
+
+    def _from_obj(obj: Any) -> str | None:
+        dtype = getattr(obj, "dtype", None)
+        if dtype is not None:
+            text = str(dtype).lower()
+            if "float64" in text or "double" in text:
+                return "double"
+            if "float32" in text or "single" in text:
+                return "float"
+
+        if isinstance(obj, array):
+            if obj.typecode == "d":
+                return "double"
+            if obj.typecode == "f":
+                return "float"
+
+        return None
+
+    pa = _from_obj(features_a)
+    pb = _from_obj(features_b)
+
+    if pa == "double" or pb == "double":
+        return "double"
+    return "float"
+
+
+def _resolve_distance_callable(distance: DistanceSpec, features_a: Any, features_b: Any) -> Callable[[Any, Any], float]:
+    import opfpy
+
+    distance_id = resolve(distance)
+    base_name = _DISTANCE_FN_BY_ID.get(distance_id)
+    if base_name is None:
+        raise ValueError(f"No callable registered for distance id {distance_id!r}.")
+
+    if _detect_precision(features_a, features_b) == "double":
+        return getattr(opfpy, f"{base_name}_double")
+    return getattr(opfpy, base_name)
+
+
+def distance(features_a: Any, features_b: Any, metric: DistanceSpec = DistanceMetric.EUCLIDEAN) -> float:
+    """Compute distance with runtime float/double dispatch.
+
+    The template specialization is chosen dynamically:
+    - float path: default and backward-compatible behavior
+    - double path: selected when inputs carry explicit double metadata
+      (e.g. numpy float64 dtype or array('d'))
+    """
+    fn = _resolve_distance_callable(metric, features_a, features_b)
+    return float(fn(features_a, features_b))
+
+
+def eucl_dist(features_a: Any, features_b: Any) -> float:
+    return distance(features_a, features_b, DistanceMetric.EUCLIDEAN)
+
+
+def chi_squared_dist(features_a: Any, features_b: Any) -> float:
+    return distance(features_a, features_b, DistanceMetric.CHI_SQUARED)
+
+
+def manhattan_dist(features_a: Any, features_b: Any) -> float:
+    return distance(features_a, features_b, DistanceMetric.MANHATTAN)
+
+
+def canberra_dist(features_a: Any, features_b: Any) -> float:
+    return distance(features_a, features_b, DistanceMetric.CANBERRA)
+
+
+def squared_chord_dist(features_a: Any, features_b: Any) -> float:
+    return distance(features_a, features_b, DistanceMetric.SQUARED_CHORD)
+
+
+def squared_chi_squared_dist(features_a: Any, features_b: Any) -> float:
+    return distance(features_a, features_b, DistanceMetric.SQUARED_CHI_SQUARED)
+
+
+def bray_curtis_dist(features_a: Any, features_b: Any) -> float:
+    return distance(features_a, features_b, DistanceMetric.BRAY_CURTIS)
 
 
 def resolve(distance: DistanceSpec) -> int:

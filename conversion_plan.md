@@ -170,6 +170,58 @@ The procedural C API will be refactored into an object-oriented C++ API.
 
 The existing `Makefile` should be replaced with a modern, cross-platform build system like **CMake**. This will make it easier to build the library on different operating systems and with different compilers, and also simplifies the management of dependencies.
 
+## 5b. Deferred Type Refactor Tasks
+
+The current C++ port preserves most of the original C member typing. A broader type-system cleanup is possible, but should be treated as explicit future work because it affects algorithms, binary I/O, bindings, and compatibility.
+
+### Original C Member Groups
+
+**`SNode` groups from `LibOPF/include/util/subgraph.h`:**
+
+- `float`: `pathval`, `dens`, `radius`
+- `int`: `label`, `root`, `pred`, `truelabel`, `position`, `nplatadj`
+- `char`: `status`, `relevant`
+- `float*`: `feat`
+- `Set*`: `adj`
+
+**`Subgraph` groups from `LibOPF/include/util/subgraph.h`:**
+
+- `SNode*`: `node`
+- `int`: `nnodes`, `nfeats`, `bestk`, `nlabels`
+- `float`: `df`, `mindens`, `maxdens`, `K`
+- `int*`: `ordered_list_of_nodes`
+
+### Corresponding C++ Port Groups
+
+- Scalar-cost group: `pathval`, `dens`, `radius`
+- Signed integer state/index group: `label`, `root`, `pred`, `truelabel`, `position`, `nplatadj`
+- Byte-flag group: `status`, `relevant`
+- Feature-storage group: `feat`
+- Adjacency group: `adj`
+- Subgraph integer metadata group: `nfeats`, `bestk`, `nlabels`
+- Subgraph float metadata group: `df`, `mindens`, `maxdens`, `K`
+- Subgraph ordering group: `ordered_list_of_nodes`
+
+### Future Tasks
+
+- Replace all raw `-1` sentinel uses in the C++ port with `NIL` for consistency and auditability.
+- Introduce explicit fixed-width type aliases in `common.hpp` for `Node` and `Subgraph` state instead of bare `int` and `char`.
+- Keep sentinel-bearing fields signed, especially `pred`, and likely `root`, using `int32_t` rather than `uint32_t`.
+- Treat `nplatadj` as a candidate for `uint32_t`, but only after verifying all arithmetic, serialization, and bindings.
+- Defer any change to `label` and `truelabel` until label-domain assumptions and file-format compatibility are reviewed.
+- Keep `status` and `relevant` as byte-sized flags (`uint8_t`) unless a stricter enum or boolean wrapper is introduced.
+- Defer refactoring `pathval`, `dens`, and `radius` into configurable numeric aliases or template parameters until OPF algorithm internals and binary model I/O are updated together.
+- Review Python bindings and tests alongside any C++ type migration so exposed property types and `NIL` semantics remain stable.
+- If fixed-width integer migration is pursued, version or document the binary file format because current model I/O writes multiple fields using `sizeof(int)`.
+
+### Notes
+
+- `pred` currently depends on `NIL = -1`, so changing it to an unsigned type would obscure sentinel semantics.
+- Two's-complement representation does not make `uint32_t(-1)` a good public sentinel design; comparisons, debugging, Python exposure, and intent all become less clear.
+- `nplatadj` is the clearest non-negative field in the reviewed integer group.
+- `status` and `relevant` are already low-risk byte flags.
+- `pathval`, `dens`, and `radius` are used broadly as `float` throughout OPF internals, so changing their type is a broader algorithm-plus-I/O refactor, not a local `Node`-only edit.
+
 ## 6. Step-by-Step Conversion Roadmap
 
 1.  **Project Setup:** Initialize a new C++20 project using CMake.

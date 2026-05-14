@@ -10,7 +10,7 @@ import struct
 import opfpy
 from opfpy import Subgraph
 from opfppy.distance import DistanceMetric, DistanceSpec, resolve as _resolve_distance
-from opfppy.ply_adapter import from_ply_file as _from_ply_file
+from opfppy.ply_adapter import subgraph_from_ply_file as _from_ply_file
 
 
 # ---------------------------------------------------------------------------

@@ -13,6 +13,11 @@ from typing import Any
 from plyfile import PlyData
 
 from opfppy.subgraph import Subgraph
+from opfppy.node import Node
+
+from numbers import Number
+
+_EXCLUDE_NODE_FIELDS = {"feat", "adj"}
 
 _REQUIRED_PROPERTIES = [
     "x", "y", "z",
@@ -94,7 +99,7 @@ def _sh_codes() -> dict[str, int]:
     return codes
 
 
-def from_ply_file(path: str, feature_profile: str = "full") -> tuple[Subgraph, dict[str, Any]]:
+def subgraph_from_ply_file(path: str, feature_profile: str = "full") -> tuple[Subgraph, dict[str, Any]]:
     """Load a Gaussian-splat PLY and return ``(Subgraph, metadata)``.
 
     Parameters
@@ -133,7 +138,7 @@ def from_ply_file(path: str, feature_profile: str = "full") -> tuple[Subgraph, d
     metadata: dict[str, Any] = {
         "source": path,
         "nnodes": int(sg.nnodes),
-        "nfeats": int(sg.nfeats),
+        "nfeats": int(sg.nfeats),        
         "feature_profile": feature_profile,
         "feature_names": feature_names,
         "scene_properties": property_names,
@@ -141,6 +146,88 @@ def from_ply_file(path: str, feature_profile: str = "full") -> tuple[Subgraph, d
         "packing": "byte=(l<<5)|((m+16)&31)",
     }
     return sg, metadata
+
+
+def node_scalar_members(node : Node) -> dict[str, str]:
+    import numpy as np
+    out: dict[str, str] = {}
+    for name in dir(node):
+        if name.startswith("_") or name in _EXCLUDE_NODE_FIELDS:
+            continue
+        try:
+            value = getattr(node, name)
+        except Exception:
+            continue
+        if callable(value):
+            continue
+        # Map Python type to numpy dtype string
+        if isinstance(value, bool):
+            out[name] = 'b1'
+        elif isinstance(value, int):
+            out[name] = 'i4'
+        elif isinstance(value, float):
+            out[name] = 'f4'
+        elif isinstance(value, str):
+            # Use variable-length unicode string
+            out[name] = 'U'
+        elif value is None:
+            out[name] = 'O'
+    return out
+
+
+def write_subgraph_to_ply_file(sg: Subgraph, path: str, metadata: dict[str, Any] | None = None, feature_profile: str = "full") -> None:
+    """Export a Subgraph to a PLY file with the given feature profile and label property.
+
+    Parameters
+    ----------
+    sg : Subgraph
+        The subgraph to export.
+    path : str
+        Path to write the PLY file.
+    metadata : dict[str, Any] or None
+        Metadata dictionary (from from_ply_file or SplatSubGraph), used to determine feature names if available.
+    feature_profile : str
+        'full' or 'compact'.
+    """
+    import numpy as np
+    from plyfile import PlyElement, PlyData
+
+    # Determine feature names to export
+    feature_names = None
+    node_members = {}
+    if metadata and "feature_names" in metadata and metadata.get("feature_profile") == feature_profile:
+        feature_names = list(metadata["feature_names"])
+    if feature_names is None:
+        if "full" in feature_profile:
+            feature_names = list(_REQUIRED_PROPERTIES)
+        elif "compact" in feature_profile:
+            feature_names = list(_COMPACT_FEATURES)    
+        else:
+            raise ValueError("feature_profile must be 'full' or 'compact'")    
+    if "+" in feature_profile:
+        # If profile is not explicitly in metadata, but matches a known set, use that set:
+        for member, dtype in node_scalar_members(sg.get_node(0)).items():
+            if member in feature_profile:
+                node_members[member] = dtype
+
+    # Build dtype for numpy structured array: all features as float32, label as int32
+    dtype = [(name, 'f4') for name in feature_names]
+    for member, type in node_members.items():
+        dtype.append((member, type))
+    arr = np.empty(sg.nnodes, dtype=dtype)
+
+    for i in range(sg.nnodes):
+        node = sg.get_node(i)
+        feat_vals = list(node.feat)[:len(feature_names)]
+        if len(feat_vals) < len(feature_names):
+            feat_vals += [0.0] * (len(feature_names) - len(feat_vals))
+        for j, name in enumerate(feature_names):
+            arr[name][i] = feat_vals[j]        
+        for member in node_members:
+            arr[member][i] = getattr(node, member, 0)
+
+    ply_el = PlyElement.describe(arr, 'vertex')
+    PlyData([ply_el], text=False).write(path)
 
 
 class SplatSubGraph(Subgraph):
@@ -172,7 +259,7 @@ class SplatSubGraph(Subgraph):
         -------
         SplatSubGraph
         """
-        sg, metadata = from_ply_file(path, feature_profile=feature_profile)
+        sg, metadata = subgraph_from_ply_file(path, feature_profile=feature_profile)
 
         # Create SplatSubGraph and transfer state
         result = cls(sg.nnodes)
@@ -227,3 +314,7 @@ class SplatSubGraph(Subgraph):
             f"  Scene props:  {len(self.metadata.get('scene_properties', []))}",
         ]
         return "\n".join(lines)
+   
+    def to_ply_file(self, path: str, feature_profile: str = "full") -> None:
+        """Export this SplatSubGraph to a PLY file with the given feature profile and label property."""
+        write_subgraph_to_ply_file(self, path, metadata=getattr(self, "metadata", None), feature_profile=feature_profile)
