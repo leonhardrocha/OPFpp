@@ -8,6 +8,7 @@
 #include <iostream>
 #include <stdexcept>
 #include <numeric>
+#include <memory>
 
 namespace opf {
     template<typename T>
