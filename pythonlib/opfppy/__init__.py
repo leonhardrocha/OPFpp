@@ -32,10 +32,15 @@ import sys
 
 _PKG_DIR = os.path.dirname(__file__)
 _PYTHONLIB_DIR = os.path.normpath(os.path.join(_PKG_DIR, ".."))
+_PKG_BIN_DIR = os.path.normpath(os.path.join(_PKG_DIR, "bin"))
 _BIN_DIR = os.path.normpath(os.path.join(_PKG_DIR, "..", "bin"))
 
 if _PYTHONLIB_DIR not in sys.path:
     sys.path.insert(0, _PYTHONLIB_DIR)
+# Wheel/self-contained layout: opfpy binary is bundled under opfppy/bin.
+if os.path.isdir(_PKG_BIN_DIR) and _PKG_BIN_DIR not in sys.path:
+    sys.path.insert(0, _PKG_BIN_DIR)
+# Development/source layout fallback.
 if _BIN_DIR not in sys.path:
     sys.path.insert(0, _BIN_DIR)
 
