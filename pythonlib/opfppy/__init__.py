@@ -57,6 +57,25 @@ except Exception:
 
 import opfpy as _opfpy
 
+# Re-export low-level free functions at package top-level.
+hello = _opfpy.hello
+propagate_cluster_labels = _opfpy.propagate_cluster_labels
+read_subgraph = _opfpy.read_subgraph
+write_subgraph = _opfpy.write_subgraph
+split_subgraph = _opfpy.split_subgraph
+eucl_dist = _opfpy.eucl_dist
+chi_squared_dist = _opfpy.chi_squared_dist
+manhattan_dist = _opfpy.manhattan_dist
+canberra_dist = _opfpy.canberra_dist
+squared_chord_dist = _opfpy.squared_chord_dist
+squared_chi_squared_dist = _opfpy.squared_chi_squared_dist
+bray_curtis_dist = _opfpy.bray_curtis_dist
+subgraph_info = _opfpy.subgraph_info
+k_fold = _opfpy.k_fold
+merge_subgraphs = _opfpy.merge_subgraphs
+compute_distance_matrix = _opfpy.compute_distance_matrix
+write_distance_matrix = _opfpy.write_distance_matrix
+
 # ---------------------------------------------------------------------------
 # Python shim classes — Node, Subgraph, OPF
 # Each module follows the opfppy.distance pattern:

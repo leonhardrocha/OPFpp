@@ -22,9 +22,46 @@ Call :meth:`register` to record the subclass for domain lookup.
 
 from __future__ import annotations
 
+import functools
 import opfpy as _opfpy
 
 from opfppy.node import _fmt_seq
+
+
+class _SubgraphParentProxy:
+    """Proxy that exposes a raw ``opfpy.Subgraph`` through Python methods/properties.
+
+    This avoids ``__class__`` reassignment (blocked by pybind11 C-extension types)
+    while still providing a friendly shim representation and method access.
+    """
+
+    def __init__(self, parent: _opfpy.Subgraph):
+        object.__setattr__(self, "_parent", parent)
+
+    @property
+    def parent(self) -> _opfpy.Subgraph:
+        """Return the wrapped raw ``opfpy.Subgraph`` instance."""
+        return object.__getattribute__(self, "_parent")
+
+    def __getattr__(self, name):
+        parent = object.__getattribute__(self, "_parent")
+        attr = getattr(parent, name)
+        if callable(attr):
+            @functools.wraps(attr)
+            def _wrapped(*args, **kwargs):
+                return attr(*args, **kwargs)
+            return _wrapped
+        return attr
+
+    def __setattr__(self, name, value):
+        if name == "_parent":
+            object.__setattr__(self, name, value)
+            return
+        setattr(object.__getattribute__(self, "_parent"), name, value)
+
+    def __repr__(self) -> str:
+        # Reuse the shim pretty repr against the wrapped parent object.
+        return Subgraph.__repr__(object.__getattribute__(self, "_parent"))
 
 
 # ---------------------------------------------------------------------------
@@ -44,7 +81,7 @@ class Subgraph(_opfpy.Subgraph):
     # ------------------------------------------------------------------
 
     @classmethod
-    def from_original_file(cls, filename: str) -> "Subgraph":
+    def from_original_file(cls, filename: str) -> "Subgraph | _SubgraphParentProxy":
         """Load from the original LibOPF binary format.
 
         Parameters
@@ -56,11 +93,10 @@ class Subgraph(_opfpy.Subgraph):
         Subgraph
         """
         sg = _opfpy.Subgraph.from_original_file(filename)
-        sg.__class__ = cls
-        return sg
+        return cls.wrap(sg)
 
     @classmethod
-    def read_model(cls, filename: str) -> "Subgraph":
+    def read_model(cls, filename: str) -> "Subgraph | _SubgraphParentProxy":
         """Load from the OPF model binary format.
 
         Parameters
@@ -72,20 +108,28 @@ class Subgraph(_opfpy.Subgraph):
         Subgraph
         """
         sg = _opfpy.Subgraph.read_model(filename)
-        sg.__class__ = cls
-        return sg
+        return cls.wrap(sg)
 
     @classmethod
-    def wrap(cls, sg: _opfpy.Subgraph) -> "Subgraph":
-        """Not supported: pybind11 C-extension types block ``__class__`` reassignment.
+    def wrap(cls, sg: _opfpy.Subgraph) -> "Subgraph | _SubgraphParentProxy":
+        """Wrap a raw ``opfpy.Subgraph`` in a Python proxy shim.
 
-        Use the factory class-methods (:meth:`from_original_file`,
-        :meth:`read_model`) which return :class:`Subgraph` instances directly.
+        Parameters
+        ----------
+        sg : opfpy.Subgraph
+            Raw C-extension subgraph instance.
+
+        Returns
+        -------
+        Subgraph | _SubgraphParentProxy
+            Existing shim instance when already wrapped, otherwise a proxy that
+            forwards methods/properties to the parent object.
         """
-        raise NotImplementedError(
-            "Cannot promote opfpy.Subgraph to opfppy.Subgraph via __class__ assignment. "
-            "Use Subgraph.from_original_file() or Subgraph.read_model() instead."
-        )
+        if isinstance(sg, cls):
+            return sg
+        if not isinstance(sg, _opfpy.Subgraph):
+            raise TypeError(f"Expected opfpy.Subgraph, got {type(sg)!r}")
+        return _SubgraphParentProxy(sg)
 
     # ------------------------------------------------------------------
     # Pretty repr

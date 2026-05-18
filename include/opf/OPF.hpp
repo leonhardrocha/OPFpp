@@ -423,6 +423,7 @@ namespace opf {
         /// Build a k-NN adjacency graph.  Sets sg.df (max arc weight among all
         /// knn neighbors) and each node's radius to its farthest knn neighbour.
         /// Mirrors opf_CreateArcs from LibOPF.
+        /// TODO: Generalize distance::euclDist<T>
         void createArcs(Subgraph<T>& sg, int knn) {
             const int n = sg.getNumNodes();
             float df = 0.0f;
@@ -473,6 +474,7 @@ namespace opf {
 
         /// Compute the Gaussian kernel PDF over the kNN graph and store the
         /// normalized density in each node.  Mirrors opf_PDF from LibOPF.
+        /// TODO: Generalize distance::euclDist<T>
         void computePDF(Subgraph<T>& sg) {
             const int n = sg.getNumNodes();
             const float K = 2.0f * sg.getDf() / 9.0f;
@@ -628,6 +630,7 @@ namespace opf {
 
         /// Build the kmax-NN graph and return the max arc distance at each k=1..kmax.
         /// Mirrors opf_CreateArcs2: sg adjacency is set to the full kmax neighbors.
+        /// TODO: Generalize distance::euclDist<T>
         std::vector<float> createArcs2(Subgraph<T>& sg, int kmax) {
             const int n = sg.getNumNodes();
             std::vector<float> maxdists(kmax, 0.0f);  // maxdists[k-1] = max df at k
