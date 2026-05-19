@@ -418,13 +418,13 @@ PYBIND11_MODULE(opfpy, m) {
              "Deep-copy this kernel into a standalone Subgraph (use sparingly).");
 
     // -------------------------------------------------------------------------
-    // Free function: split a Subgraph into KernelSubGraph partitions
+    // Free function: split a Subgraph into KernelSubGraph partitions by (offset, size)
     // -------------------------------------------------------------------------
     m.def("split_subgraph_into_kernels",
-        [](opf::Subgraph<float>& sg, int n_kernels) {
-            return opf::splitSubgraphIntoKernels<float>(sg, n_kernels);
+        [](opf::Subgraph<float>& sg, const std::vector<std::pair<int, int>>& slices) {
+            return opf::splitSubgraphIntoKernels<float>(sg, slices);
         },
-        py::arg("subgraph"), py::arg("n_kernels"),
-        "Split a Subgraph into n_kernels KernelSubGraph partitions by slicing features. "
-        "Feature slices are deep-copied; all other node data is shallow (COW).");
+        py::arg("subgraph"), py::arg("slices"),
+        "Split a Subgraph into KernelSubGraph partitions by explicit (offset, size) slices. "
+        "Each entry in slices is a (offset, size) pair. Feature slices are deep-copied; all other node data is shallow (COW).");
 }

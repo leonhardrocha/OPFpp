@@ -24,26 +24,26 @@ from typing import Sequence
 from opfpy import KernelSubGraph, Subgraph
 
 
-def split_subgraph_into_kernels(sg: Subgraph, n_kernels: int) -> list[KernelSubGraph]:
-    """Split a Subgraph into *n_kernels* :class:`KernelSubGraph` partitions.
+def split_subgraph_into_kernels(sg: Subgraph, slices: list[tuple[int, int]]) -> list[KernelSubGraph]:
+    """Split a Subgraph into :class:`KernelSubGraph` partitions by (offset, size) slices.
 
     Delegates to the C++ ``opfpy.split_subgraph_into_kernels`` implementation.
-    Feature slices are deep-copied per partition; all scalar node metadata and
-    adjacency lists are shallow (copy-on-write) references to the source nodes.
+    Each entry in `slices` is a (offset, size) tuple, and the kernel covers
+    features [offset, offset+size). Out-of-bounds or zero-size slices are skipped.
 
     Parameters
     ----------
     sg : Subgraph
         Source graph.  ``sg.nfeats`` must be > 0.
-    n_kernels : int
-        Number of kernels (partitions) to create.
+    slices : list[tuple[int, int]]
+        List of (offset, size) pairs for each kernel slice.
 
     Returns
     -------
     list[KernelSubGraph]
-        List of up to *n_kernels* :class:`KernelSubGraph` objects.
+        List of :class:`KernelSubGraph` objects, one per valid slice.
     """
-    return opfpy.split_subgraph_into_kernels(sg, n_kernels)
+    return opfpy.split_subgraph_into_kernels(sg, slices)
 def cluster_and_propagate(sg: Subgraph, k: int) -> None:
     """Unsupervised OPF clustering followed by label propagation.
 
@@ -107,7 +107,9 @@ def bestk_cluster_and_propagate(
     if weighted_kernel:
         if kernels is None:
             # Auto-split: one slice per feature dimension.
-            kernels = split_subgraph_into_kernels(sg, max(sg.nfeats, 1))
+            nfeats = sg.nfeats
+            slices = [(i, 1) for i in range(nfeats)]
+            kernels = split_subgraph_into_kernels(sg, slices)
         sizes = [k.nfeats for k in kernels]
         if kernel_weights is None:
             uniform_w = 1.0 / float(max(len(sizes), 1))

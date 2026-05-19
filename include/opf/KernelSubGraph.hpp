@@ -265,22 +265,28 @@ private:
 ///
 /// The last kernel may receive fewer features (remainder).  Returns fewer than
 /// *n_kernels* entries only when nfeats < n_kernels.
+/// Split *sg* into KernelSubGraph objects by explicit (offset, size) slices.
+///
+/// Each entry in `slices` is a pair (offset, size), and the kernel covers
+/// features [offset, offset+size). Out-of-bounds or zero-size slices are skipped.
 template<typename T>
-std::vector<KernelSubGraph<T>> splitSubgraphIntoKernels(Subgraph<T>& sg, int n_kernels) {
+std::vector<KernelSubGraph<T>> splitSubgraphIntoKernels(
+    Subgraph<T>& sg,
+    const std::vector<std::pair<int, int>>& slices
+) {
     const int nfeats = sg.getNumFeats();
-    if (nfeats <= 0 || n_kernels <= 0) {
-        throw std::invalid_argument("nfeats and n_kernels must be > 0");
+    if (nfeats <= 0) {
+        throw std::invalid_argument("nfeats must be > 0");
     }
-    const int slice_size = static_cast<int>(std::ceil(static_cast<double>(nfeats) / n_kernels));
     std::vector<KernelSubGraph<T>> kernels;
-    kernels.reserve(n_kernels);
-    int offset = 0;
-    for (int k = 0; k < n_kernels; ++k) {
-        int start = offset;
-        int end   = std::min(start + slice_size, nfeats);
-        if (end <= start) break;
+    kernels.reserve(slices.size());
+    for (const auto& s : slices) {
+        int start = s.first;
+        int sz = s.second;
+        if (sz <= 0 || start < 0 || start >= nfeats) continue;
+        int end = std::min(start + sz, nfeats);
+        if (end <= start) continue;
         kernels.emplace_back(sg, start, end);
-        offset = end;
     }
     return kernels;
 }
