@@ -146,5 +146,34 @@ class TestSemiSupervised(unittest.TestCase):
         self.assertGreater(merged.nnodes, 0)
 
 
+class TestExample5Workflow(unittest.TestCase):
+    def test_example5_unsupervised_workflow(self):
+        """Replicates examples/example5_unsupervised.py workflow."""
+        data_path = os.path.join(os.path.dirname(__file__), "..", "data", "data1.dat")
+
+        # 1) Load dataset
+        sg = opfpy.Subgraph.from_original_file(data_path)
+
+        # 2) Unsupervised best-k min-cut setup
+        clf = opfpy.OPF()
+        clf.bestk_min_cut(sg, 2, 10)
+
+        # 3) Propagate cluster labels
+        opfpy.propagate_cluster_labels(sg)
+
+        # 4) Ensure clustering produced labels
+        labels = {sg.get_node(i).label for i in range(sg.nnodes)}
+        self.assertGreater(len(labels), 0)
+
+        # 5) Split and run k-NN classify
+        train_sg, test_sg = opfpy.split_subgraph(sg, 0.5)
+        clf.knn_classify(train_sg, test_sg)
+
+        # 6) Accuracy is a valid probability in [0, 1]
+        acc = clf.accuracy(test_sg)
+        self.assertGreaterEqual(acc, 0.0)
+        self.assertLessEqual(acc, 1.0)
+
+
 if __name__ == "__main__":
     unittest.main()

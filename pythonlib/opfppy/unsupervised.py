@@ -19,9 +19,31 @@ Typical usage::
 from __future__ import annotations
 
 import opfpy
-from opfpy import Subgraph
+from typing import Sequence
+
+from opfpy import KernelSubGraph, Subgraph
 
 
+def split_subgraph_into_kernels(sg: Subgraph, n_kernels: int) -> list[KernelSubGraph]:
+    """Split a Subgraph into *n_kernels* :class:`KernelSubGraph` partitions.
+
+    Delegates to the C++ ``opfpy.split_subgraph_into_kernels`` implementation.
+    Feature slices are deep-copied per partition; all scalar node metadata and
+    adjacency lists are shallow (copy-on-write) references to the source nodes.
+
+    Parameters
+    ----------
+    sg : Subgraph
+        Source graph.  ``sg.nfeats`` must be > 0.
+    n_kernels : int
+        Number of kernels (partitions) to create.
+
+    Returns
+    -------
+    list[KernelSubGraph]
+        List of up to *n_kernels* :class:`KernelSubGraph` objects.
+    """
+    return opfpy.split_subgraph_into_kernels(sg, n_kernels)
 def cluster_and_propagate(sg: Subgraph, k: int) -> None:
     """Unsupervised OPF clustering followed by label propagation.
 
@@ -43,6 +65,58 @@ def cluster_and_propagate(sg: Subgraph, k: int) -> None:
     sg.bestk = k
     clf = opfpy.OPF()
     clf.cluster(sg)
+    opfpy.propagate_cluster_labels(sg)
+
+
+def bestk_cluster_and_propagate(
+    sg: Subgraph,
+    kmin: int = 2,
+    kmax: int = 10,
+    weighted_kernel: bool = False,
+    kernels: Sequence[KernelSubGraph] | None = None,
+    kernel_weights: list[float] | None = None,
+) -> None:
+    """Best-k unsupervised clustering followed by label propagation.
+
+    When ``weighted_kernel=True`` the PDF for each arc (p, q) is computed as::
+
+        sum_i( w_i * log(K_i(p, q)) )
+
+    where ``K_i(p, q) = exp(-dist_i(p, q) / K)`` is the Gaussian kernel
+    evaluated on the i-th feature slice and ``dist_i`` is the Euclidean
+    distance restricted to that slice.
+
+    Parameters
+    ----------
+    sg : Subgraph
+        Input subgraph. Modified in-place.
+    kmin, kmax : int
+        k-range for best-k min-cut search.
+    weighted_kernel : bool
+        Enable kernel-weighted PDF. When True, ``kernels`` or an
+        auto-split is used to define the feature partitions.
+    kernels : list[Subgraph] | None
+        Explicit kernel Subgraphs produced by :func:`split_subgraph_into_kernels`.
+        Each kernel's ``nfeats`` defines the feature-slice size for that kernel.
+        If None and ``weighted_kernel=True``, a per-feature kernel split is
+        used (one kernel per feature dimension, uniform weights).
+    kernel_weights : list[float] | None
+        Per-kernel scalar weights.  Must match ``len(kernels)`` when supplied.
+        Defaults to uniform 1/n weights.
+    """
+    if weighted_kernel:
+        if kernels is None:
+            # Auto-split: one slice per feature dimension.
+            kernels = split_subgraph_into_kernels(sg, max(sg.nfeats, 1))
+        sizes = [k.nfeats for k in kernels]
+        if kernel_weights is None:
+            uniform_w = 1.0 / float(max(len(sizes), 1))
+            kernel_weights = [uniform_w] * len(sizes)
+        sg.kernel_feature_sizes = sizes
+        sg.kernel_weights = kernel_weights
+
+    clf = opfpy.OPF()
+    clf.bestk_min_cut(sg, kmin, kmax)
     opfpy.propagate_cluster_labels(sg)
 
 

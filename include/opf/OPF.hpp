@@ -484,17 +484,10 @@ namespace opf {
             float mindens =  std::numeric_limits<float>::max();
             float maxdens = -std::numeric_limits<float>::max();
 
-            for (int i = 0; i < n; ++i) {
-                float sum = 0.0f;
-                int   nelems = 1;
-                for (int q : sg.getNode(i).getAdj()) {
-                    float dist = distance::euclDist<T>(*sg.getNode(i).getFeat(), *sg.getNode(q).getFeat());
-                    sum += std::exp(-dist / K);
-                    ++nelems;
-                }
-                value[i] = sum / static_cast<float>(nelems);
-                if (value[i] < mindens) mindens = value[i];
-                if (value[i] > maxdens) maxdens = value[i];
+            if (hasKernelWeighting(sg)) {
+                computePDFKernelWeighted(sg, K, value, mindens, maxdens);
+            } else {
+                computePDFCore(sg, K, value, mindens, maxdens);
             }
 
             sg.setMinDens(mindens);
@@ -628,6 +621,218 @@ namespace opf {
         static constexpr float opf_MAXDENS  = 1000.0f;
         static constexpr float opf_MAXARCW  = 100000.0f;
 
+        class GaussianPdfTerm {
+        public:
+            float operator()(
+                const std::vector<T>& feat_p,
+                const std::vector<T>& feat_q,
+                float K
+            ) const {
+                const std::size_t limit = std::min(feat_p.size(), feat_q.size());
+                return evaluateSlice(feat_p, feat_q, K, 0, limit);
+            }
+
+            float evaluateSlice(
+                const std::vector<T>& feat_p,
+                const std::vector<T>& feat_q,
+                float K,
+                std::size_t start,
+                std::size_t end
+            ) const {
+                if (start >= end) {
+                    return 0.0f;
+                }
+
+                float dist_sq = 0.0f;
+                for (std::size_t d = start; d < end; ++d) {
+                    const float diff = static_cast<float>(feat_p[d] - feat_q[d]);
+                    dist_sq += diff * diff;
+                }
+
+                const float dist = std::sqrt(dist_sq);
+                return std::exp(-dist / K);
+            }
+
+            // Returns log(K_i) = log(exp(-dist/K)) = -dist/K.
+            // Used by WeightedPdfDecorator so the combined PDF is
+            //   sum_i( w_i * log(K_i) )   (weighted log-kernel sum).
+            float logEvaluateSlice(
+                const std::vector<T>& feat_p,
+                const std::vector<T>& feat_q,
+                float K,
+                std::size_t start,
+                std::size_t end
+            ) const {
+                if (start >= end) {
+                    return 0.0f;
+                }
+
+                float dist_sq = 0.0f;
+                for (std::size_t d = start; d < end; ++d) {
+                    const float diff = static_cast<float>(feat_p[d] - feat_q[d]);
+                    dist_sq += diff * diff;
+                }
+
+                const float dist = std::sqrt(dist_sq);
+                return -dist / K;  // log(K_i) where K_i = exp(-dist/K)
+            }
+        };
+
+        class WeightedPdfDecorator {
+        public:
+            WeightedPdfDecorator(
+                const GaussianPdfTerm& base,
+                const std::vector<int>& kernel_feature_sizes,
+                const std::vector<float>& kernel_weights
+            )
+                : base_(base),
+                  kernel_feature_sizes_(kernel_feature_sizes),
+                  kernel_weights_(kernel_weights) {}
+
+            float operator()(
+                const std::vector<T>& feat_p,
+                const std::vector<T>& feat_q,
+                float K
+            ) const {
+                const std::size_t limit = std::min(feat_p.size(), feat_q.size());
+                std::size_t offset = 0;
+                float weighted_sum = 0.0f;
+
+                for (std::size_t i = 0; i < kernel_feature_sizes_.size(); ++i) {
+                    const int slice_size = kernel_feature_sizes_[i];
+                    const std::size_t start = offset;
+                    const std::size_t end = offset + static_cast<std::size_t>(std::max(slice_size, 0));
+                    offset = end;
+
+                    if (slice_size <= 0 || start >= limit) {
+                        continue;
+                    }
+
+                    const std::size_t clipped_end = std::min(end, limit);
+                    // Compute sum_i( w_i * log(K_i) ) per arc (p, q).
+                    weighted_sum += kernel_weights_[i] * base_.logEvaluateSlice(feat_p, feat_q, K, start, clipped_end);
+                }
+
+                return weighted_sum;
+            }
+
+        private:
+            const GaussianPdfTerm& base_;
+            const std::vector<int>& kernel_feature_sizes_;
+            const std::vector<float>& kernel_weights_;
+        };
+
+        bool hasKernelWeighting(const Subgraph<T>& sg) const {
+            const auto& kernel_feature_sizes = sg.getKernelFeatureSizes();
+            const auto& kernel_weights = sg.getKernelWeights();
+            return !kernel_feature_sizes.empty() &&
+                   kernel_feature_sizes.size() == kernel_weights.size();
+        }
+
+        void computePDFCore(
+            const Subgraph<T>& sg,
+            float K,
+            std::vector<float>& value,
+            float& mindens,
+            float& maxdens
+        ) const {
+            const int n = sg.getNumNodes();
+            const GaussianPdfTerm gaussian_pdf;
+            for (int i = 0; i < n; ++i) {
+                float sum = 0.0f;
+                int nelems = 1;
+                for (int q : sg.getNode(i).getAdj()) {
+                    sum += gaussian_pdf(*sg.getNode(i).getFeat(), *sg.getNode(q).getFeat(), K);
+                    ++nelems;
+                }
+                value[i] = sum / static_cast<float>(nelems);
+                if (value[i] < mindens) mindens = value[i];
+                if (value[i] > maxdens) maxdens = value[i];
+            }
+        }
+
+        void computePDFKernelWeighted(
+            const Subgraph<T>& sg,
+            float K,
+            std::vector<float>& value,
+            float& mindens,
+            float& maxdens
+        ) const {
+            const int n = sg.getNumNodes();
+            const GaussianPdfTerm gaussian_pdf;
+            const auto& kernel_feature_sizes = sg.getKernelFeatureSizes();
+            const auto& kernel_weights = sg.getKernelWeights();
+            const WeightedPdfDecorator weighted_pdf(gaussian_pdf, kernel_feature_sizes, kernel_weights);
+            for (int i = 0; i < n; ++i) {
+                float sum = 0.0f;
+                int nelems = 1;
+                for (int q : sg.getNode(i).getAdj()) {
+                    sum += weighted_pdf(*sg.getNode(i).getFeat(), *sg.getNode(q).getFeat(), K);
+                    ++nelems;
+                }
+                value[i] = sum / static_cast<float>(nelems);
+                if (value[i] < mindens) mindens = value[i];
+                if (value[i] > maxdens) maxdens = value[i];
+            }
+        }
+
+        void pdfToKmax(
+            const Subgraph<T>& sg,
+            float K,
+            int kmax,
+            std::vector<float>& value,
+            float& mindens,
+            float& maxdens
+        ) const {
+            const int n = sg.getNumNodes();
+            const GaussianPdfTerm gaussian_pdf;
+            for (int i = 0; i < n; ++i) {
+                float sum = 0.0f;
+                int nelems = 1;
+                const auto& adjList = sg.getNode(i).getAdj();
+                int k = 0;
+                for (int q : adjList) {
+                    if (k >= kmax) break;
+                    sum += gaussian_pdf(*sg.getNode(i).getFeat(), *sg.getNode(q).getFeat(), K);
+                    ++nelems;
+                    ++k;
+                }
+                value[i] = sum / static_cast<float>(nelems);
+                if (value[i] < mindens) mindens = value[i];
+                if (value[i] > maxdens) maxdens = value[i];
+            }
+        }
+
+        void pdfToKmaxKernelWeighted(
+            const Subgraph<T>& sg,
+            float K,
+            int kmax,
+            std::vector<float>& value,
+            float& mindens,
+            float& maxdens
+        ) const {
+            const int n = sg.getNumNodes();
+            const GaussianPdfTerm gaussian_pdf;
+            const auto& kernel_feature_sizes = sg.getKernelFeatureSizes();
+            const auto& kernel_weights = sg.getKernelWeights();
+            const WeightedPdfDecorator weighted_pdf(gaussian_pdf, kernel_feature_sizes, kernel_weights);
+            for (int i = 0; i < n; ++i) {
+                float sum = 0.0f;
+                int nelems = 1;
+                const auto& adjList = sg.getNode(i).getAdj();
+                int k = 0;
+                for (int q : adjList) {
+                    if (k >= kmax) break;
+                    sum += weighted_pdf(*sg.getNode(i).getFeat(), *sg.getNode(q).getFeat(), K);
+                    ++nelems;
+                    ++k;
+                }
+                value[i] = sum / static_cast<float>(nelems);
+                if (value[i] < mindens) mindens = value[i];
+                if (value[i] > maxdens) maxdens = value[i];
+            }
+        }
+
         /// Build the kmax-NN graph and return the max arc distance at each k=1..kmax.
         /// Mirrors opf_CreateArcs2: sg adjacency is set to the full kmax neighbors.
         /// TODO: Generalize distance::euclDist<T>
@@ -682,21 +887,10 @@ namespace opf {
             float mindens =  std::numeric_limits<float>::max();
             float maxdens = -std::numeric_limits<float>::max();
 
-            for (int i = 0; i < n; ++i) {
-                float sum   = 0.0f;
-                int   nelems = 1;
-                const auto& adjList = sg.getNode(i).getAdj();
-                int k = 0;
-                for (int q : adjList) {
-                    if (k >= kmax) break;
-                    float dist = distance::euclDist<T>(*sg.getNode(i).getFeat(), *sg.getNode(q).getFeat());
-                    sum += std::exp(-dist / K);
-                    ++nelems;
-                    ++k;
-                }
-                value[i] = sum / static_cast<float>(nelems);
-                if (value[i] < mindens) mindens = value[i];
-                if (value[i] > maxdens) maxdens = value[i];
+            if (hasKernelWeighting(sg)) {
+                pdfToKmaxKernelWeighted(sg, K, kmax, value, mindens, maxdens);
+            } else {
+                pdfToKmax(sg, K, kmax, value, mindens, maxdens);
             }
 
             sg.setMinDens(mindens);

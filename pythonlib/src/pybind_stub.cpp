@@ -7,6 +7,7 @@
 #include <string>
 #include "../include/opf/Node.hpp"
 #include "../include/opf/Subgraph.hpp"
+#include "../include/opf/KernelSubGraph.hpp"
 #include "../include/opf/file.hpp"
 #include "../include/opf/Distance.hpp"
 #include "../include/opf/Utils.hpp"
@@ -60,6 +61,8 @@ PYBIND11_MODULE(opfpy, m) {
         .def_property("mindens", &Subgraph<float>::getMinDens, &Subgraph<float>::setMinDens)
         .def_property("maxdens", &Subgraph<float>::getMaxDens, &Subgraph<float>::setMaxDens)
         .def_property("K", &Subgraph<float>::getK, &Subgraph<float>::setK)
+        .def_property("kernel_feature_sizes", &Subgraph<float>::getKernelFeatureSizes, &Subgraph<float>::setKernelFeatureSizes)
+        .def_property("kernel_weights", &Subgraph<float>::getKernelWeights, &Subgraph<float>::setKernelWeights)
         .def_property_readonly("nnodes", &Subgraph<float>::getNumNodes)
         .def("get_node",
             [](Subgraph<float>& sg, int i) -> Node<float>& {
@@ -122,6 +125,8 @@ PYBIND11_MODULE(opfpy, m) {
         .def_property("mindens", &Subgraph<double>::getMinDens, &Subgraph<double>::setMinDens)
         .def_property("maxdens", &Subgraph<double>::getMaxDens, &Subgraph<double>::setMaxDens)
         .def_property("K", &Subgraph<double>::getK, &Subgraph<double>::setK)
+        .def_property("kernel_feature_sizes", &Subgraph<double>::getKernelFeatureSizes, &Subgraph<double>::setKernelFeatureSizes)
+        .def_property("kernel_weights", &Subgraph<double>::getKernelWeights, &Subgraph<double>::setKernelWeights)
         .def_property_readonly("nnodes", &Subgraph<double>::getNumNodes)
         .def("get_node",
             [](Subgraph<double>& sg, int i) -> Node<double>& {
@@ -352,4 +357,74 @@ PYBIND11_MODULE(opfpy, m) {
         return mat;
     }, py::arg("filename"),
        "Read a precomputed distance matrix from a binary file. Returns list of lists of float.");
+
+    // -------------------------------------------------------------------------
+    // KernelNode<float> — COW proxy node used inside KernelSubGraph
+    // -------------------------------------------------------------------------
+    py::class_<opf::KernelNode<float>>(m, "KernelNode")
+        .def_property("pathval",   &opf::KernelNode<float>::getPathval,   &opf::KernelNode<float>::setPathval)
+        .def_property("dens",      &opf::KernelNode<float>::getDens,      &opf::KernelNode<float>::setDens)
+        .def_property("radius",    &opf::KernelNode<float>::getRadius,    &opf::KernelNode<float>::setRadius)
+        .def_property("label",     &opf::KernelNode<float>::getLabel,     &opf::KernelNode<float>::setLabel)
+        .def_property("root",      &opf::KernelNode<float>::getRoot,      &opf::KernelNode<float>::setRoot)
+        .def_property("pred",      &opf::KernelNode<float>::getPred,      &opf::KernelNode<float>::setPred)
+        .def_property("truelabel", &opf::KernelNode<float>::getTruelabel, &opf::KernelNode<float>::setTruelabel)
+        .def_property("position",  &opf::KernelNode<float>::getPosition,  &opf::KernelNode<float>::setPosition)
+        .def_property("status",    &opf::KernelNode<float>::getStatus,    &opf::KernelNode<float>::setStatus)
+        .def_property("relevant",  &opf::KernelNode<float>::getRelevant,  &opf::KernelNode<float>::setRelevant)
+        .def_property("nplatadj",  &opf::KernelNode<float>::getNplatadj,  &opf::KernelNode<float>::setNplatadj)
+        .def_property("feat",
+            [](const opf::KernelNode<float>& n) { return *n.getFeat(); },
+            [](opf::KernelNode<float>& n, const std::vector<float>& v) {
+                n.setFeat(std::make_shared<std::vector<float>>(v));
+            })
+        .def_property("adj",
+            [](const opf::KernelNode<float>& n) { return n.getAdj(); },
+            [](opf::KernelNode<float>& n, const std::vector<int>& v) {
+                n.getAdj() = v;
+            })
+        .def("add_to_adj", &opf::KernelNode<float>::addToAdj)
+        .def("clear_adj",  &opf::KernelNode<float>::clearAdj)
+        .def("flush",      &opf::KernelNode<float>::flush,
+             "Write dirty overlay scalars back to the source Node.");
+
+    // -------------------------------------------------------------------------
+    // KernelSubGraph<float> — feature-slice decorator with COW node proxies
+    // -------------------------------------------------------------------------
+    py::class_<opf::KernelSubGraph<float>>(m, "KernelSubGraph")
+        .def_property("nfeats",   &opf::KernelSubGraph<float>::getNumFeats,  &opf::KernelSubGraph<float>::setNumFeats)
+        .def_property("bestk",    &opf::KernelSubGraph<float>::getBestK,     &opf::KernelSubGraph<float>::setBestK)
+        .def_property("nlabels",  &opf::KernelSubGraph<float>::getNumLabels, &opf::KernelSubGraph<float>::setNumLabels)
+        .def_property("df",       &opf::KernelSubGraph<float>::getDf,        &opf::KernelSubGraph<float>::setDf)
+        .def_property("mindens",  &opf::KernelSubGraph<float>::getMinDens,   &opf::KernelSubGraph<float>::setMinDens)
+        .def_property("maxdens",  &opf::KernelSubGraph<float>::getMaxDens,   &opf::KernelSubGraph<float>::setMaxDens)
+        .def_property("K",        &opf::KernelSubGraph<float>::getK,         &opf::KernelSubGraph<float>::setK)
+        .def_property("kernel_feature_sizes",
+            &opf::KernelSubGraph<float>::getKernelFeatureSizes,
+            &opf::KernelSubGraph<float>::setKernelFeatureSizes)
+        .def_property("kernel_weights",
+            &opf::KernelSubGraph<float>::getKernelWeights,
+            &opf::KernelSubGraph<float>::setKernelWeights)
+        .def_property_readonly("nnodes",      &opf::KernelSubGraph<float>::getNumNodes)
+        .def_property_readonly("feat_start",  &opf::KernelSubGraph<float>::featStart)
+        .def_property_readonly("feat_end",    &opf::KernelSubGraph<float>::featEnd)
+        .def("get_node",
+            [](opf::KernelSubGraph<float>& ksg, int i) -> opf::KernelNode<float>& {
+                return ksg.getNode(i);
+            }, py::return_value_policy::reference_internal)
+        .def("flush_all", &opf::KernelSubGraph<float>::flushAll,
+             "Flush all dirty node overlays back to the source Subgraph.")
+        .def("to_subgraph", &opf::KernelSubGraph<float>::toSubgraph,
+             "Deep-copy this kernel into a standalone Subgraph (use sparingly).");
+
+    // -------------------------------------------------------------------------
+    // Free function: split a Subgraph into KernelSubGraph partitions
+    // -------------------------------------------------------------------------
+    m.def("split_subgraph_into_kernels",
+        [](opf::Subgraph<float>& sg, int n_kernels) {
+            return opf::splitSubgraphIntoKernels<float>(sg, n_kernels);
+        },
+        py::arg("subgraph"), py::arg("n_kernels"),
+        "Split a Subgraph into n_kernels KernelSubGraph partitions by slicing features. "
+        "Feature slices are deep-copied; all other node data is shallow (COW).");
 }

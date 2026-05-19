@@ -104,6 +104,7 @@ from opfppy.colormap import label_rgb, build_palette, labels_to_rgb_array, load_
 
 # Explicitly export convenience submodules.
 from opfppy import supervised, unsupervised, utils, distance, node, subgraph, opf_class, ply_adapter, colormap
+from opfppy.unsupervised import split_subgraph_into_kernels, bestk_cluster_and_propagate
 
 
 __all__ = [
@@ -126,6 +127,8 @@ __all__ = [
     # Sub-modules
     "supervised", "unsupervised", "utils",
     "distance", "node", "subgraph", "opf_class", "ply_adapter", "colormap",
+    # Unsupervised helpers
+    "split_subgraph_into_kernels", "bestk_cluster_and_propagate",
     # Low-level extension (escape hatch)
     "_opfpy",
 ]
