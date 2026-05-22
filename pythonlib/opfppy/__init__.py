@@ -75,6 +75,8 @@ k_fold = _opfpy.k_fold
 merge_subgraphs = _opfpy.merge_subgraphs
 compute_distance_matrix = _opfpy.compute_distance_matrix
 write_distance_matrix = _opfpy.write_distance_matrix
+split_subgraph_into_kernels = getattr(_opfpy, "split_subgraph_into_kernels", None)
+KernelSubGraph = getattr(_opfpy, "KernelSubGraph", None)
 
 # ---------------------------------------------------------------------------
 # Python shim classes — Node, Subgraph, OPF
@@ -123,6 +125,7 @@ __all__ = [
     "squared_chord_dist", "squared_chi_squared_dist", "bray_curtis_dist",
     "subgraph_info", "k_fold", "merge_subgraphs",
     "compute_distance_matrix", "write_distance_matrix",
+    "split_subgraph_into_kernels", "KernelSubGraph",
     # Sub-modules
     "supervised", "unsupervised", "utils",
     "distance", "node", "subgraph", "opf_class", "ply_adapter", "colormap",
