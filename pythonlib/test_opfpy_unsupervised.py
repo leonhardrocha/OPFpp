@@ -146,5 +146,101 @@ class TestSemiSupervised(unittest.TestCase):
         self.assertGreater(merged.nnodes, 0)
 
 
+class TestKernelSubgraphSplit(unittest.TestCase):
+    def test_split_subgraph_into_kernels_and_cluster_smoke(self):
+        """Smoke test for kernel splitting + unsupervised bestk workflow."""
+        nnodes = 32
+        nfeats = 12
+        kernel_feature_sizes = [3, 3, 4, 2]
+
+        sg = opfpy.Subgraph(nnodes)
+        sg.nfeats = nfeats
+        sg.nlabels = 0
+
+        # Build two separable groups with deterministic features.
+        for i in range(nnodes):
+            base = 0.0 if i < (nnodes // 2) else 10.0
+            feat = [base + (j * 0.01) + ((i % 4) * 0.001) for j in range(nfeats)]
+            node = sg.get_node(i)
+            node.feat = feat
+            node.truelabel = 0
+            node.position = i
+            node.label = 0
+
+        slices = []
+        offset = 0
+        for size in kernel_feature_sizes:
+            slices.append((offset, size))
+            offset += size
+
+        kernels = opfpy.split_subgraph_into_kernels(sg, slices)
+        self.assertEqual(len(kernels), len(kernel_feature_sizes))
+        self.assertEqual([k.nfeats for k in kernels], kernel_feature_sizes)
+
+        clf = opfpy.OPF()
+        clf.bestk_min_cut(sg, 2, 5)
+        clf.cluster(sg)
+
+        # Ensure propagation produces non-zero labels from cluster roots.
+        for i in range(sg.nnodes):
+            if sg.get_node(i).root == i:
+                sg.get_node(i).truelabel = int(sg.get_node(i).label) + 1
+        opfpy.propagate_cluster_labels(sg)
+
+        labels = [int(sg.get_node(i).label) for i in range(sg.nnodes)]
+        self.assertEqual(len(labels), sg.nnodes)
+        self.assertTrue(all(isinstance(lbl, int) for lbl in labels))
+        self.assertGreater(sum(1 for lbl in labels if lbl > 0), 0)
+
+    def test_named_kernel_slice_dict_density_and_cluster_per_kernel(self):
+        """Split with named (offset,size) tuples and cluster each kernel separately."""
+        nnodes = 24
+        nfeats = 12
+
+        sg = opfpy.Subgraph(nnodes)
+        sg.nfeats = nfeats
+        sg.nlabels = 0
+
+        for i in range(nnodes):
+            base = 0.0 if i < (nnodes // 2) else 8.0
+            feat = [base + (j * 0.02) + ((i % 3) * 0.005) for j in range(nfeats)]
+            node = sg.get_node(i)
+            node.feat = feat
+            node.truelabel = 0
+            node.label = 0
+            node.position = i
+
+        kernel_slices = {
+            "xyz": (0, 3),
+            "f_dc": (3, 3),
+            "f_rest": (6, 4),
+            "opacity": (10, 2),
+        }
+
+        ordered_items = list(kernel_slices.items())
+        all_slices = [kernel_slice for _, kernel_slice in ordered_items]
+        kernels = opfpy.split_subgraph_into_kernels(sg, all_slices)
+
+        self.assertEqual(len(kernels), len(ordered_items))
+
+        for (kernel_name, kernel_slice), kernel in zip(ordered_items, kernels):
+            # Convert each returned KernelSubGraph to plain Subgraph and run OPF independently.
+            ksg = kernel.to_subgraph()
+            self.assertEqual(ksg.nfeats, kernel_slice[1], msg=f"kernel={kernel_name}")
+
+            clf = opfpy.OPF()
+            clf.create_arcs(ksg, 2)
+            clf.compute_pdf(ksg)
+            clf.cluster(ksg)
+
+            dens = [float(ksg.get_node(i).dens) for i in range(ksg.nnodes)]
+            labels = [int(ksg.get_node(i).label) for i in range(ksg.nnodes)]
+
+            self.assertEqual(len(dens), ksg.nnodes, msg=f"kernel={kernel_name}")
+            self.assertTrue(all(d >= 0.0 for d in dens), msg=f"kernel={kernel_name}")
+            self.assertEqual(len(labels), ksg.nnodes, msg=f"kernel={kernel_name}")
+            self.assertGreater(ksg.nlabels, 0, msg=f"kernel={kernel_name}")
+
+
 if __name__ == "__main__":
     unittest.main()
