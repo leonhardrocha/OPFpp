@@ -147,23 +147,35 @@ PYBIND11_MODULE(opfpy, m) {
         ;
 
     // Supervised OPF workflow class
-    py::enum_<OPF<float>::DensityMode>(m, "DensityMode")
-        .value("LEGACY_GAUSSIAN", OPF<float>::DensityMode::LegacyGaussian)
-        .value("CUSTOM", OPF<float>::DensityMode::Custom)
+    py::enum_<OPF<float>::AdjacencyMode>(m, "AdjacencyMode")
+        .value("LEGACY_KNN", OPF<float>::AdjacencyMode::LegacyKnn)
+        .value("PRESET", OPF<float>::AdjacencyMode::Preset)
         .export_values();
+
+    py::enum_<OPF<float>::DensityEstimationMode>(m, "DensityEstimationMode")
+        .value("GAUSSIAN", OPF<float>::DensityEstimationMode::Gaussian)
+        .value("INVERSE_DISTANCE", OPF<float>::DensityEstimationMode::InverseDistance)
+        .export_values();
+
+    py::class_<OPF<float>::KernelBestKResult>(m, "KernelBestKResult")
+        .def(py::init<>())
+        .def_readwrite("kernel_id", &OPF<float>::KernelBestKResult::kernel_id)
+        .def_readwrite("bestk", &OPF<float>::KernelBestKResult::bestk)
+        .def_readwrite("mincut", &OPF<float>::KernelBestKResult::mincut)
+        .def_readwrite("df_at_bestk", &OPF<float>::KernelBestKResult::df_at_bestk);
 
     py::class_<OPF<float>>(m, "OPF")
         .def(py::init<>())
-        .def("set_bestk_density_mode", &OPF<float>::setBestKDensityMode,
+        .def("set_adjacency_mode", &OPF<float>::setAdjacencyMode,
             py::arg("mode"),
-            "Set density mode used during best-k candidate evaluation.")
-        .def("set_final_density_mode", &OPF<float>::setFinalDensityMode,
+            "Set adjacency handling mode for k-NN graph construction.")
+        .def("get_adjacency_mode", &OPF<float>::getAdjacencyMode,
+            "Get current adjacency handling mode.")
+        .def("set_density_estimation_mode", &OPF<float>::setDensityEstimationMode,
             py::arg("mode"),
-            "Set density mode used for final density after best-k selection.")
-        .def("get_bestk_density_mode", &OPF<float>::getBestKDensityMode,
-            "Get density mode used during best-k candidate evaluation.")
-        .def("get_final_density_mode", &OPF<float>::getFinalDensityMode,
-            "Get density mode used for final density after best-k selection.")
+            "Set density estimation mode used in PDF accumulation.")
+        .def("get_density_estimation_mode", &OPF<float>::getDensityEstimationMode,
+            "Get current density estimation mode.")
         .def("train", &OPF<float>::training,
             py::arg("train_subgraph"),
             "Train a supervised OPF model in-place on the training subgraph.")
@@ -193,6 +205,9 @@ PYBIND11_MODULE(opfpy, m) {
             py::arg("subgraph"), py::arg("kmin"), py::arg("kmax"),
             "Select best k by normalized cut minimization, then rebuild arcs and compute PDF. "
             "Mirrors opf_BestkMinCut from LibOPF.")
+        .def("bestk_min_cut_per_kernel", &OPF<float>::bestkMinCutPerKernel,
+            py::arg("kernels"), py::arg("kmin"), py::arg("kmax"),
+            "Run best-k minimization independently for each KernelSubGraph and return per-kernel results.")
         .def("cluster", &OPF<float>::clustering,
             py::arg("subgraph"),
             "Unsupervised OPF clustering in-place. Requires node dens and adj lists populated.")

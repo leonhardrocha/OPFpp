@@ -29,7 +29,7 @@ namespace opf {
         float getMinDens() const { return mindens; }
         float getMaxDens() const { return maxdens; }
         float getK() const { return K; }
-        const std::vector<Node<T>>& getNodes() const { return nodes; }
+        const std::vector<Node<T>>& getNodes() const { return std::move(nodes); }
         std::vector<Node<T>>& getNodes() { return nodes; }
         const Node<T>& getNode(int index) const { return nodes[index]; }
         Node<T>& getNode(int index) { return nodes[index]; }

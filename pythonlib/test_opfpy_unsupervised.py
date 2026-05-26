@@ -242,7 +242,7 @@ class TestKernelSubgraphSplit(unittest.TestCase):
             self.assertGreater(ksg.nlabels, 0, msg=f"kernel={kernel_name}")
 
 
-class TestDensityModes(unittest.TestCase):
+class TestKernelBestKModes(unittest.TestCase):
     def _make_unsup_subgraph(self, nnodes=40, nfeats=6):
         sg = opfpy.Subgraph(nnodes)
         sg.nfeats = nfeats
@@ -257,90 +257,127 @@ class TestDensityModes(unittest.TestCase):
             node.position = i
         return sg
 
-    def _make_asymmetric_subgraph(self):
-        # Intentionally asymmetric distances to avoid flat/degenerate density maps.
-        samples = [
-            ([0.00, 0.00], 0),
-            ([0.12, 0.06], 0),
-            ([0.25, -0.03], 0),
-            ([1.10, 1.00], 0),
-            ([1.30, 0.95], 0),
-            ([2.40, 2.10], 0),
-            ([3.80, 0.40], 0),
-            ([7.50, 6.90], 0),
-        ]
-        return _make_subgraph(samples, nfeats=2, nlabels=0)
+    def _make_kernel_sensitive_subgraph(self):
+        samples = []
+        for i in range(12):
+            c = 0.0 if i < 6 else 1.0
+            feat = [
+                c * 3.0 + (i % 3) * 0.02,
+                c * 3.0 + (i % 2) * 0.03,
+                c * 1.0 + (i % 4) * 0.09,
+                c * 1.0 + (i % 5) * 0.07,
+                c * 0.3 + (i % 6) * 0.12,
+                c * 0.3 + (i % 7) * 0.11,
+            ]
+            samples.append((feat, 0))
+        return _make_subgraph(samples, nfeats=6, nlabels=0)
 
-    def test_legacy_mode_matches_default_behavior(self):
-        density_mode = getattr(opfpy, "DensityMode", None)
+    def test_density_estimation_mode_changes_density_values(self):
+        density_mode = getattr(opfpy, "DensityEstimationMode", None)
         if density_mode is None:
-            self.skipTest("DensityMode enum not available in this build")
+            self.skipTest("DensityEstimationMode enum not available in this build")
 
-        sg_default = self._make_unsup_subgraph()
-        sg_legacy = self._make_unsup_subgraph()
+        sg_gauss = self._make_unsup_subgraph(nnodes=20, nfeats=4)
+        sg_inv = self._make_unsup_subgraph(nnodes=20, nfeats=4)
 
-        clf_default = opfpy.OPF()
-        clf_legacy = opfpy.OPF()
-        clf_legacy.set_bestk_density_mode(density_mode.LEGACY_GAUSSIAN)
-        clf_legacy.set_final_density_mode(density_mode.LEGACY_GAUSSIAN)
+        clf_gauss = opfpy.OPF()
+        clf_inv = opfpy.OPF()
 
-        clf_default.bestk_min_cut(sg_default, 2, 8)
-        clf_legacy.bestk_min_cut(sg_legacy, 2, 8)
+        clf_gauss.set_density_estimation_mode(density_mode.GAUSSIAN)
+        clf_inv.set_density_estimation_mode(density_mode.INVERSE_DISTANCE)
 
-        self.assertEqual(int(sg_default.bestk), int(sg_legacy.bestk))
-        for i in range(sg_default.nnodes):
-            self.assertAlmostEqual(
-                float(sg_default.get_node(i).dens),
-                float(sg_legacy.get_node(i).dens),
-                places=6,
-            )
+        clf_gauss.create_arcs(sg_gauss, 3)
+        clf_inv.create_arcs(sg_inv, 3)
+        clf_gauss.compute_pdf(sg_gauss)
+        clf_inv.compute_pdf(sg_inv)
 
-    def test_legacy_bestk_custom_final_keeps_bestk(self):
-        density_mode = getattr(opfpy, "DensityMode", None)
-        if density_mode is None:
-            self.skipTest("DensityMode enum not available in this build")
+        dens_gauss = [float(sg_gauss.get_node(i).dens) for i in range(sg_gauss.nnodes)]
+        dens_inv = [float(sg_inv.get_node(i).dens) for i in range(sg_inv.nnodes)]
 
-        sg_default = self._make_unsup_subgraph()
-        sg_mixed = self._make_unsup_subgraph()
+        self.assertEqual(len(dens_gauss), len(dens_inv))
+        self.assertTrue(any(abs(a - b) > 1e-6 for a, b in zip(dens_gauss, dens_inv)))
 
-        clf_default = opfpy.OPF()
-        clf_mixed = opfpy.OPF()
-        clf_mixed.set_bestk_density_mode(density_mode.LEGACY_GAUSSIAN)
-        clf_mixed.set_final_density_mode(density_mode.CUSTOM)
+    def test_preset_adjacency_mode_keeps_existing_edges(self):
+        adjacency_mode = getattr(opfpy, "AdjacencyMode", None)
+        if adjacency_mode is None:
+            self.skipTest("AdjacencyMode enum not available in this build")
 
-        self.assertEqual(clf_mixed.get_bestk_density_mode(), density_mode.LEGACY_GAUSSIAN)
-        self.assertEqual(clf_mixed.get_final_density_mode(), density_mode.CUSTOM)
+        sg = self._make_unsup_subgraph(nnodes=8, nfeats=3)
+        expected_adj = {}
+        for i in range(sg.nnodes):
+            node = sg.get_node(i)
+            node.clear_adj()
+            a = (i + 1) % sg.nnodes
+            b = (i + 3) % sg.nnodes
+            node.add_to_adj(a)
+            node.add_to_adj(b)
+            expected_adj[i] = [a, b]
 
-        clf_default.bestk_min_cut(sg_default, 2, 8)
-        clf_mixed.bestk_min_cut(sg_mixed, 2, 8)
+        clf = opfpy.OPF()
+        clf.set_adjacency_mode(adjacency_mode.PRESET)
+        clf.create_arcs(sg, 2)
 
-        self.assertEqual(int(sg_default.bestk), int(sg_mixed.bestk))
+        for i in range(sg.nnodes):
+            self.assertEqual(list(sg.get_node(i).adj), expected_adj[i])
+        self.assertEqual(int(sg.bestk), 2)
+        self.assertGreater(float(sg.df), 0.0)
 
-    def test_custom_mode_changes_density_values(self):
-        density_mode = getattr(opfpy, "DensityMode", None)
-        if density_mode is None:
-            self.skipTest("DensityMode enum not available in this build")
+    def test_bestk_min_cut_per_kernel_returns_results(self):
+        if getattr(opfpy, "split_subgraph_into_kernels", None) is None:
+            self.skipTest("split_subgraph_into_kernels not available")
+        if getattr(opfpy, "KernelBestKResult", None) is None:
+            self.skipTest("KernelBestKResult not available in this build")
 
-        sg_legacy = self._make_asymmetric_subgraph()
-        sg_custom = self._make_asymmetric_subgraph()
+        sg = self._make_kernel_sensitive_subgraph()
+        kernels = opfpy.split_subgraph_into_kernels(sg, [(0, 2), (2, 2), (4, 2)])
 
-        clf_legacy = opfpy.OPF()
-        clf_custom = opfpy.OPF()
+        clf = opfpy.OPF()
+        results = clf.bestk_min_cut_per_kernel(kernels, 2, 4)
 
-        clf_legacy.set_final_density_mode(density_mode.LEGACY_GAUSSIAN)
-        clf_custom.set_final_density_mode(density_mode.CUSTOM)
+        self.assertEqual(len(results), 3)
+        bestks = []
+        dfs = []
+        for idx, res in enumerate(results):
+            self.assertEqual(int(res.kernel_id), idx)
+            self.assertGreaterEqual(int(res.bestk), 2)
+            self.assertLessEqual(int(res.bestk), 4)
+            self.assertGreater(float(res.df_at_bestk), 0.0)
+            bestks.append(int(res.bestk))
+            dfs.append(float(res.df_at_bestk))
 
-        # Use the same adjacency and df setup for both modes; only density mapping differs.
-        clf_legacy.create_arcs(sg_legacy, 3)
-        clf_custom.create_arcs(sg_custom, 3)
-        clf_legacy.compute_pdf(sg_legacy)
-        clf_custom.compute_pdf(sg_custom)
+        self.assertTrue(any(abs(a - b) > 1e-6 for a, b in zip(dfs, dfs[1:])))
+        self.assertEqual(len(bestks), 3)
 
-        dens_legacy = [float(sg_legacy.get_node(i).dens) for i in range(sg_legacy.nnodes)]
-        dens_custom = [float(sg_custom.get_node(i).dens) for i in range(sg_custom.nnodes)]
+    def test_kernel_adjacency_changes_with_k_and_can_differ(self):
+        if getattr(opfpy, "split_subgraph_into_kernels", None) is None:
+            self.skipTest("split_subgraph_into_kernels not available")
 
-        self.assertEqual(len(dens_legacy), len(dens_custom))
-        self.assertTrue(any(abs(a - b) > 1e-6 for a, b in zip(dens_legacy, dens_custom)))
+        sg = self._make_kernel_sensitive_subgraph()
+        kernels = opfpy.split_subgraph_into_kernels(sg, [(0, 2), (2, 2), (4, 2)])
+
+        clf = opfpy.OPF()
+        low_k = 2
+        high_k = 10
+
+        kernel_signatures = []
+        for kernel in kernels:
+            sg_low = kernel.to_subgraph()
+            sg_high = kernel.to_subgraph()
+
+            clf.create_arcs(sg_low, low_k)
+            clf.create_arcs(sg_high, high_k)
+
+            low_sizes = [len(sg_low.get_node(i).adj) for i in range(sg_low.nnodes)]
+            high_sizes = [len(sg_high.get_node(i).adj) for i in range(sg_high.nnodes)]
+
+            self.assertTrue(all(s == low_k for s in low_sizes))
+            self.assertTrue(all(s == high_k for s in high_sizes))
+            self.assertGreater(sum(high_sizes), sum(low_sizes))
+
+            # Capture adjacency signature under the same k to verify kernels may differ.
+            kernel_signatures.append(tuple(tuple(sg_low.get_node(i).adj) for i in range(sg_low.nnodes)))
+
+        self.assertGreater(len(set(kernel_signatures)), 1)
 
 
 if __name__ == "__main__":
