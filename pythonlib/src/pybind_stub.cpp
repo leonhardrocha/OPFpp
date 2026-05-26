@@ -147,8 +147,23 @@ PYBIND11_MODULE(opfpy, m) {
         ;
 
     // Supervised OPF workflow class
+    py::enum_<OPF<float>::DensityMode>(m, "DensityMode")
+        .value("LEGACY_GAUSSIAN", OPF<float>::DensityMode::LegacyGaussian)
+        .value("CUSTOM", OPF<float>::DensityMode::Custom)
+        .export_values();
+
     py::class_<OPF<float>>(m, "OPF")
         .def(py::init<>())
+        .def("set_bestk_density_mode", &OPF<float>::setBestKDensityMode,
+            py::arg("mode"),
+            "Set density mode used during best-k candidate evaluation.")
+        .def("set_final_density_mode", &OPF<float>::setFinalDensityMode,
+            py::arg("mode"),
+            "Set density mode used for final density after best-k selection.")
+        .def("get_bestk_density_mode", &OPF<float>::getBestKDensityMode,
+            "Get density mode used during best-k candidate evaluation.")
+        .def("get_final_density_mode", &OPF<float>::getFinalDensityMode,
+            "Get density mode used for final density after best-k selection.")
         .def("train", &OPF<float>::training,
             py::arg("train_subgraph"),
             "Train a supervised OPF model in-place on the training subgraph.")

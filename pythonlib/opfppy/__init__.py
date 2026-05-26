@@ -77,6 +77,7 @@ compute_distance_matrix = _opfpy.compute_distance_matrix
 write_distance_matrix = _opfpy.write_distance_matrix
 split_subgraph_into_kernels = getattr(_opfpy, "split_subgraph_into_kernels", None)
 KernelSubGraph = getattr(_opfpy, "KernelSubGraph", None)
+DensityMode = getattr(_opfpy, "DensityMode", None)
 
 # ---------------------------------------------------------------------------
 # Python shim classes — Node, Subgraph, OPF
@@ -126,6 +127,7 @@ __all__ = [
     "subgraph_info", "k_fold", "merge_subgraphs",
     "compute_distance_matrix", "write_distance_matrix",
     "split_subgraph_into_kernels", "KernelSubGraph",
+    "DensityMode",
     # Sub-modules
     "supervised", "unsupervised", "utils",
     "distance", "node", "subgraph", "opf_class", "ply_adapter", "colormap",

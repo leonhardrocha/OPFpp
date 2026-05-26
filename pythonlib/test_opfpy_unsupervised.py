@@ -242,5 +242,106 @@ class TestKernelSubgraphSplit(unittest.TestCase):
             self.assertGreater(ksg.nlabels, 0, msg=f"kernel={kernel_name}")
 
 
+class TestDensityModes(unittest.TestCase):
+    def _make_unsup_subgraph(self, nnodes=40, nfeats=6):
+        sg = opfpy.Subgraph(nnodes)
+        sg.nfeats = nfeats
+        sg.nlabels = 0
+        for i in range(nnodes):
+            base = 0.0 if i < (nnodes // 2) else 6.0
+            feat = [base + (j * 0.015) + ((i % 5) * 0.003) for j in range(nfeats)]
+            node = sg.get_node(i)
+            node.feat = feat
+            node.truelabel = 0
+            node.label = 0
+            node.position = i
+        return sg
+
+    def _make_asymmetric_subgraph(self):
+        # Intentionally asymmetric distances to avoid flat/degenerate density maps.
+        samples = [
+            ([0.00, 0.00], 0),
+            ([0.12, 0.06], 0),
+            ([0.25, -0.03], 0),
+            ([1.10, 1.00], 0),
+            ([1.30, 0.95], 0),
+            ([2.40, 2.10], 0),
+            ([3.80, 0.40], 0),
+            ([7.50, 6.90], 0),
+        ]
+        return _make_subgraph(samples, nfeats=2, nlabels=0)
+
+    def test_legacy_mode_matches_default_behavior(self):
+        density_mode = getattr(opfpy, "DensityMode", None)
+        if density_mode is None:
+            self.skipTest("DensityMode enum not available in this build")
+
+        sg_default = self._make_unsup_subgraph()
+        sg_legacy = self._make_unsup_subgraph()
+
+        clf_default = opfpy.OPF()
+        clf_legacy = opfpy.OPF()
+        clf_legacy.set_bestk_density_mode(density_mode.LEGACY_GAUSSIAN)
+        clf_legacy.set_final_density_mode(density_mode.LEGACY_GAUSSIAN)
+
+        clf_default.bestk_min_cut(sg_default, 2, 8)
+        clf_legacy.bestk_min_cut(sg_legacy, 2, 8)
+
+        self.assertEqual(int(sg_default.bestk), int(sg_legacy.bestk))
+        for i in range(sg_default.nnodes):
+            self.assertAlmostEqual(
+                float(sg_default.get_node(i).dens),
+                float(sg_legacy.get_node(i).dens),
+                places=6,
+            )
+
+    def test_legacy_bestk_custom_final_keeps_bestk(self):
+        density_mode = getattr(opfpy, "DensityMode", None)
+        if density_mode is None:
+            self.skipTest("DensityMode enum not available in this build")
+
+        sg_default = self._make_unsup_subgraph()
+        sg_mixed = self._make_unsup_subgraph()
+
+        clf_default = opfpy.OPF()
+        clf_mixed = opfpy.OPF()
+        clf_mixed.set_bestk_density_mode(density_mode.LEGACY_GAUSSIAN)
+        clf_mixed.set_final_density_mode(density_mode.CUSTOM)
+
+        self.assertEqual(clf_mixed.get_bestk_density_mode(), density_mode.LEGACY_GAUSSIAN)
+        self.assertEqual(clf_mixed.get_final_density_mode(), density_mode.CUSTOM)
+
+        clf_default.bestk_min_cut(sg_default, 2, 8)
+        clf_mixed.bestk_min_cut(sg_mixed, 2, 8)
+
+        self.assertEqual(int(sg_default.bestk), int(sg_mixed.bestk))
+
+    def test_custom_mode_changes_density_values(self):
+        density_mode = getattr(opfpy, "DensityMode", None)
+        if density_mode is None:
+            self.skipTest("DensityMode enum not available in this build")
+
+        sg_legacy = self._make_asymmetric_subgraph()
+        sg_custom = self._make_asymmetric_subgraph()
+
+        clf_legacy = opfpy.OPF()
+        clf_custom = opfpy.OPF()
+
+        clf_legacy.set_final_density_mode(density_mode.LEGACY_GAUSSIAN)
+        clf_custom.set_final_density_mode(density_mode.CUSTOM)
+
+        # Use the same adjacency and df setup for both modes; only density mapping differs.
+        clf_legacy.create_arcs(sg_legacy, 3)
+        clf_custom.create_arcs(sg_custom, 3)
+        clf_legacy.compute_pdf(sg_legacy)
+        clf_custom.compute_pdf(sg_custom)
+
+        dens_legacy = [float(sg_legacy.get_node(i).dens) for i in range(sg_legacy.nnodes)]
+        dens_custom = [float(sg_custom.get_node(i).dens) for i in range(sg_custom.nnodes)]
+
+        self.assertEqual(len(dens_legacy), len(dens_custom))
+        self.assertTrue(any(abs(a - b) > 1e-6 for a, b in zip(dens_legacy, dens_custom)))
+
+
 if __name__ == "__main__":
     unittest.main()
