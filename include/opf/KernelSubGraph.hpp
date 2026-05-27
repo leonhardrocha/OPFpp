@@ -207,6 +207,20 @@ public:
         for (auto& kn : nodes_) kn.flush();
     }
 
+    /// Compute per-node modular probability from density: prob = ln(dens)
+    /// with zero-guard (dens <= epsilon -> prob = 0).
+    std::vector<float> computeLogDensityProbabilities(float epsilon = 1e-12f) const {
+        std::vector<float> probs(getNumNodes(), 0.0f);
+        for (int i = 0; i < getNumNodes(); ++i) {
+            float dens = nodes_[i].getDens();
+            if (dens > epsilon) {
+                float p = std::log(dens);
+                probs[i] = std::isfinite(p) ? p : 0.0f;
+            }
+        }
+        return probs;
+    }
+
     /// Convert to a plain Subgraph<T> (full deep copy — use sparingly).
     Subgraph<T> toSubgraph() const {
         const int n = getNumNodes();

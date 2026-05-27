@@ -8,6 +8,7 @@
 #include "../include/opf/Node.hpp"
 #include "../include/opf/Subgraph.hpp"
 #include <opf/KernelSubGraph.hpp>
+#include <opf/KernelJointProbability.hpp>
 #include "../include/opf/file.hpp"
 #include "../include/opf/Distance.hpp"
 #include "../include/opf/Utils.hpp"
@@ -164,6 +165,41 @@ PYBIND11_MODULE(opfpy, m) {
         .def_readwrite("mincut", &OPF<float>::KernelBestKResult::mincut)
         .def_readwrite("df_at_bestk", &OPF<float>::KernelBestKResult::df_at_bestk);
 
+        py::class_<opf::KernelJointProbabilityAccumulator>(m, "KernelJointProbabilityAccumulator")
+               .def(py::init<int, const std::vector<float>&>(),
+                   py::arg("nnodes") = 0,
+                   py::arg("kernel_weights") = std::vector<float>{})
+           .def("get_num_nodes", &opf::KernelJointProbabilityAccumulator::getNumNodes,
+               "Get accumulator node dimension.")
+           .def("has_kernel", &opf::KernelJointProbabilityAccumulator::hasKernel,
+               py::arg("kernel_id"), "Check whether a kernel contribution exists.")
+           .def("clear", &opf::KernelJointProbabilityAccumulator::clear,
+               "Remove all kernel contributions and zero central sum.")
+           .def("reset", &opf::KernelJointProbabilityAccumulator::reset,
+               py::arg("nnodes"), "Reset accumulator with a new node dimension.")
+               .def("set_kernel_weights", &opf::KernelJointProbabilityAccumulator::setKernelWeights,
+                   py::arg("kernel_weights"),
+                   "Set all kernel weights (missing kernel IDs default to 1.0).")
+               .def("get_kernel_weights", &opf::KernelJointProbabilityAccumulator::getKernelWeights,
+                   py::return_value_policy::copy,
+                   "Get the current kernel weights vector.")
+               .def("set_kernel_weight", &opf::KernelJointProbabilityAccumulator::setKernelWeight,
+                   py::arg("kernel_id"), py::arg("weight"),
+                   "Set one kernel weight; vector grows with default 1.0 if needed.")
+               .def("get_kernel_weight", &opf::KernelJointProbabilityAccumulator::getKernelWeight,
+                   py::arg("kernel_id"),
+                   "Get one kernel weight (defaults to 1.0 for out-of-range IDs).")
+           .def("update_kernel_probabilities", &opf::KernelJointProbabilityAccumulator::updateKernelProbabilities,
+               py::arg("kernel_id"), py::arg("new_probs"),
+               "Replace-update kernel probabilities: subtract old, add new.")
+           .def("remove_kernel_probabilities", &opf::KernelJointProbabilityAccumulator::removeKernelProbabilities,
+               py::arg("kernel_id"), "Remove one kernel contribution from central sum.")
+           .def("get_central_joint_probabilities", &opf::KernelJointProbabilityAccumulator::getCentralJointProbabilities,
+               py::return_value_policy::copy,
+               "Get central per-node summed probabilities.")
+           .def("get_central_joint_sum", &opf::KernelJointProbabilityAccumulator::getCentralJointSum,
+               "Get scalar sum over central per-node probabilities.");
+
     py::class_<OPF<float>>(m, "OPF")
         .def(py::init<>())
         .def("set_adjacency_mode", &OPF<float>::setAdjacencyMode,
@@ -208,6 +244,15 @@ PYBIND11_MODULE(opfpy, m) {
         .def("bestk_min_cut_per_kernel", &OPF<float>::bestkMinCutPerKernel,
             py::arg("kernels"), py::arg("kmin"), py::arg("kmax"),
             "Run best-k minimization independently for each KernelSubGraph and return per-kernel results.")
+        .def("update_joint_probabilities_from_kernels", &OPF<float>::updateJointProbabilitiesFromKernels,
+            py::arg("kernels"), py::arg("accumulator"), py::arg("epsilon") = 1e-12f,
+            "Compute ln(dens) kernel probabilities and update central accumulator with replace semantics.")
+        .def("apply_joint_probabilities_to_subgraph", &OPF<float>::applyJointProbabilitiesToSubgraph,
+            py::arg("subgraph"), py::arg("accumulator"),
+            "Materialize central joint probabilities into subgraph dens/pathval.")
+        .def("cluster_with_joint_probabilities", &OPF<float>::clusterWithJointProbabilities,
+            py::arg("subgraph"), py::arg("accumulator"),
+            "Apply central joint probabilities and run standard clustering.")
         .def("cluster", &OPF<float>::clustering,
             py::arg("subgraph"),
             "Unsupervised OPF clustering in-place. Requires node dens and adj lists populated.")
@@ -459,6 +504,9 @@ PYBIND11_MODULE(opfpy, m) {
                 return ksg.getNode(i);
             },
             py::return_value_policy::reference_internal)
+           .def("compute_log_density_probabilities", &opf::KernelSubGraph<float>::computeLogDensityProbabilities,
+               py::arg("epsilon") = 1e-12f,
+               "Compute per-node prob=ln(dens), guarded as prob=0 when dens<=epsilon.")
         .def("flush_all",   &opf::KernelSubGraph<float>::flushAll,
              "Flush all dirty node overlays back to the source Subgraph.")
         .def("to_subgraph", &opf::KernelSubGraph<float>::toSubgraph,

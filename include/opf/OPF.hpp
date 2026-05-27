@@ -5,6 +5,7 @@
 #include "Distance.hpp"
 #include "ComponentTree.hpp"
 #include "KernelSubGraph.hpp"
+#include "KernelJointProbability.hpp"
 #include <string>
 #include <vector>
 #include <queue>
@@ -680,6 +681,64 @@ namespace opf {
             }
 
             return results;
+        }
+
+        void updateJointProbabilitiesFromKernels(
+            const std::vector<KernelSubGraph<T>>& kernels,
+            KernelJointProbabilityAccumulator& accumulator,
+            float epsilon = 1e-12f
+        ) const {
+            for (size_t idx = 0; idx < kernels.size(); ++idx) {
+                std::vector<float> probs = kernels[idx].computeLogDensityProbabilities(epsilon);
+                accumulator.updateKernelProbabilities(static_cast<int>(idx), probs);
+            }
+        }
+
+        void applyJointProbabilitiesToSubgraph(
+            Subgraph<T>& sg,
+            const KernelJointProbabilityAccumulator& accumulator
+        ) const {
+            const int n = sg.getNumNodes();
+            const std::vector<float>& probs = accumulator.getCentralJointProbabilities();
+            if (static_cast<int>(probs.size()) != n) {
+                throw std::invalid_argument("Accumulator size must match subgraph node count");
+            }
+
+            if (n == 0) return;
+
+            float minprob = std::numeric_limits<float>::max();
+            float maxprob = std::numeric_limits<float>::lowest();
+            for (float p : probs) {
+                if (p < minprob) minprob = p;
+                if (p > maxprob) maxprob = p;
+            }
+
+            sg.setMinDens(minprob);
+            sg.setMaxDens(maxprob);
+
+            if (minprob == maxprob) {
+                for (int i = 0; i < n; ++i) {
+                    sg.getNode(i).setDens(opf_MAXDENS);
+                    sg.getNode(i).setPathval(opf_MAXDENS - 1.0f);
+                }
+                return;
+            }
+
+            for (int i = 0; i < n; ++i) {
+                float norm = (probs[i] - minprob) / (maxprob - minprob);
+                norm = std::clamp(norm, 0.0f, 1.0f);
+                float dens = (opf_MAXDENS - 1.0f) * norm + 1.0f;
+                sg.getNode(i).setDens(dens);
+                sg.getNode(i).setPathval(dens - 1.0f);
+            }
+        }
+
+        void clusterWithJointProbabilities(
+            Subgraph<T>& sg,
+            const KernelJointProbabilityAccumulator& accumulator
+        ) {
+            applyJointProbabilitiesToSubgraph(sg, accumulator);
+            clustering(sg);
         }
 
     private:

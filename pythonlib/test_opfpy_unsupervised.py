@@ -1,6 +1,7 @@
 import unittest
 import os
 import sys
+import math
 
 # Ensure the built extension is on the path when run from pythonlib/
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), 'bin'))
@@ -378,6 +379,104 @@ class TestKernelBestKModes(unittest.TestCase):
             kernel_signatures.append(tuple(tuple(sg_low.get_node(i).adj) for i in range(sg_low.nnodes)))
 
         self.assertGreater(len(set(kernel_signatures)), 1)
+
+
+class TestKernelJointProbabilities(unittest.TestCase):
+    def _make_joint_subgraph(self):
+        samples = [
+            ([0.0, 0.0, 1.0, 1.0], 0),
+            ([0.1, 0.2, 1.2, 0.9], 0),
+            ([4.9, 5.0, 6.0, 6.1], 0),
+            ([5.1, 4.8, 5.8, 6.0], 0),
+        ]
+        return _make_subgraph(samples, nfeats=4, nlabels=0)
+
+    def test_compute_log_density_probabilities(self):
+        if getattr(opfpy, "split_subgraph_into_kernels", None) is None:
+            self.skipTest("split_subgraph_into_kernels not available")
+
+        sg = self._make_joint_subgraph()
+        kernels = opfpy.split_subgraph_into_kernels(sg, [(0, 2), (2, 2)])
+
+        # Explicitly set densities on one kernel view, then read log-probs from that view.
+        densities = [1.0, 2.0, 0.0, 4.0]
+        for i, d in enumerate(densities):
+            kernels[0].get_node(i).dens = d
+
+        probs = kernels[0].compute_log_density_probabilities()
+        expected = [0.0, math.log(2.0), 0.0, math.log(4.0)]
+
+        self.assertEqual(len(probs), len(expected))
+        for p, e in zip(probs, expected):
+            self.assertAlmostEqual(float(p), float(e), places=6)
+
+    def test_accumulator_replace_semantics(self):
+        accumulator_type = getattr(opfpy, "KernelJointProbabilityAccumulator", None)
+        if accumulator_type is None:
+            self.skipTest("KernelJointProbabilityAccumulator not available in this build")
+
+        acc = accumulator_type(3)
+        acc.update_kernel_probabilities(0, [1.0, 2.0, 3.0])
+        self.assertEqual(list(acc.get_central_joint_probabilities()), [1.0, 2.0, 3.0])
+
+        acc.update_kernel_probabilities(1, [0.5, 0.5, 0.5])
+        self.assertEqual(list(acc.get_central_joint_probabilities()), [1.5, 2.5, 3.5])
+
+        # Replace kernel 0 contribution: old is removed before new is added.
+        acc.update_kernel_probabilities(0, [2.0, 2.0, 2.0])
+        self.assertEqual(list(acc.get_central_joint_probabilities()), [2.5, 2.5, 2.5])
+
+        acc.remove_kernel_probabilities(1)
+        self.assertEqual(list(acc.get_central_joint_probabilities()), [2.0, 2.0, 2.0])
+
+    def test_accumulator_weighted_sum_and_weight_updates(self):
+        accumulator_type = getattr(opfpy, "KernelJointProbabilityAccumulator", None)
+        if accumulator_type is None:
+            self.skipTest("KernelJointProbabilityAccumulator not available in this build")
+
+        # Two kernels with explicit initial weights.
+        acc = accumulator_type(3, [0.5, 2.0])
+        acc.update_kernel_probabilities(0, [2.0, 2.0, 2.0])
+        acc.update_kernel_probabilities(1, [1.0, 1.0, 1.0])
+        self.assertEqual(list(acc.get_central_joint_probabilities()), [3.0, 3.0, 3.0])
+
+        # Unknown kernel IDs default to weight=1.0.
+        self.assertAlmostEqual(float(acc.get_kernel_weight(10)), 1.0, places=6)
+
+        # Updating one weight must recompute the existing weighted sum.
+        acc.set_kernel_weight(0, 1.5)
+        self.assertEqual(list(acc.get_central_joint_probabilities()), [5.0, 5.0, 5.0])
+
+        # Replacing the full weight vector should also recompute.
+        acc.set_kernel_weights([1.0, 1.0])
+        self.assertEqual(list(acc.get_central_joint_probabilities()), [3.0, 3.0, 3.0])
+
+    def test_cluster_with_joint_probabilities(self):
+        split_fn = getattr(opfpy, "split_subgraph_into_kernels", None)
+        accumulator_type = getattr(opfpy, "KernelJointProbabilityAccumulator", None)
+        if split_fn is None or accumulator_type is None:
+            self.skipTest("Joint probability APIs not available in this build")
+
+        sg = self._make_joint_subgraph()
+        clf = opfpy.OPF()
+        clf.create_arcs(sg, 2)
+        clf.compute_pdf(sg)
+
+        kernels = split_fn(sg, [(0, 2), (2, 2)])
+        acc = accumulator_type(sg.nnodes)
+        clf.update_joint_probabilities_from_kernels(kernels, acc)
+        clf.apply_joint_probabilities_to_subgraph(sg, acc)
+
+        dens = [float(sg.get_node(i).dens) for i in range(sg.nnodes)]
+        pathvals = [float(sg.get_node(i).pathval) for i in range(sg.nnodes)]
+        self.assertTrue(all(d >= 1.0 for d in dens))
+        for d, pv in zip(dens, pathvals):
+            self.assertAlmostEqual(pv, d - 1.0, places=5)
+
+        clf.cluster_with_joint_probabilities(sg, acc)
+        self.assertGreater(int(sg.nlabels), 0)
+        labels = [int(sg.get_node(i).label) for i in range(sg.nnodes)]
+        self.assertEqual(len(labels), sg.nnodes)
 
 
 if __name__ == "__main__":
