@@ -164,3 +164,17 @@ endif()
 
 # opfpy_cython depends on opfpy being built first (runtime import)
 add_dependencies(opfpy_cython opfpy)
+
+# =====================================================================
+# INSTALLATION RULES FOR SCIKIT-BUILD-CORE / PIP WHEELS
+# =====================================================================
+if(NOT DEFINED CMAKE_INSTALL_PREFIX)
+    set(CMAKE_INSTALL_PREFIX "${CMAKE_BINARY_DIR}/install")
+endif()
+
+# Correct syntax: Passing the targets directly to their specific destinations
+install(TARGETS opfpy opfpy_cython
+    LIBRARY DESTINATION src/opfppy
+    ARCHIVE DESTINATION src/opfppy
+    RUNTIME DESTINATION src/opfppy
+)

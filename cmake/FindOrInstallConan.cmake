@@ -1,88 +1,150 @@
-# --- Conan auto-install logic ---
-# Uses the .venv Python (pythonlib/.venv) for Conan, since the UCRT64 system
-# Python is externally managed (PEP 668) and cannot install packages via pip.
-set(CONAN_TOOLCHAIN_PATH "${CMAKE_BINARY_DIR}/conan_toolchain.cmake")
-if(NOT EXISTS "${CONAN_TOOLCHAIN_PATH}")
-    message(STATUS "Conan toolchain not found. Running Conan to install dependencies...")
+# --- Conan & Dependencies Auto-Install Logic ---
+# Inteligente: Funciona perfeitamente COM e SEM Docker (Multiplataforma)
 
-    # Resolve .venv Python: prefer it over UCRT64 system Python for Conan
+# 1. Fallback de configuracao de Build se nao especificado via CLI
+if(NOT CMAKE_BUILD_TYPE AND NOT CMAKE_CONFIGURATION_TYPES)
+    set(CMAKE_BUILD_TYPE "Release" CACHE STRING "Choose the type of build." FORCE)
+    message(STATUS "CMAKE_BUILD_TYPE nao especificado. Definindo padrao para: ${CMAKE_BUILD_TYPE}")
+endif()
+
+# 2. Resolver caminhos do .venv local
+if(WIN32)
     set(_venv_python "${CMAKE_SOURCE_DIR}/pythonlib/.venv/Scripts/python.exe")
-    if(EXISTS "${_venv_python}")
-        set(_conan_python "${_venv_python}")
-        message(STATUS "Using .venv Python for Conan: ${_conan_python}")
-    else()
+    set(_venv_bin "${CMAKE_SOURCE_DIR}/pythonlib/.venv/Scripts")
+else()
+    set(_venv_python "${CMAKE_SOURCE_DIR}/pythonlib/.venv/bin/python")
+    set(_venv_bin "${CMAKE_SOURCE_DIR}/pythonlib/.venv/bin")
+endif()
+
+# =====================================================================
+# VALIDAÇÃO DO VENV: Evita capturar binarios fantasmas/quebrados copiados no Docker
+# =====================================================================
+set(_venv_valid FALSE)
+if(EXISTS "${_venv_python}")
+    # O venv existe e o interpretador eh valido
+    set(_conan_python "${_venv_python}")
+    set(_venv_valid TRUE)
+    message(STATUS "Ambiente .venv valido detectado. Usando Python: ${_conan_python}")
+else()
+    # O venv nao existe ou esta quebrado (ex: copiado de outra máquina/host no Docker)
+    if(NOT Python_EXECUTABLE)
+        find_program(Python_EXECUTABLE NAMES python3 python python.exe)
+    endif()
+    
+    if(Python_EXECUTABLE)
         set(_conan_python "${Python_EXECUTABLE}")
-        message(STATUS "Using system Python for Conan: ${_conan_python}")
-    endif()
-
-    # Prefer the conan CLI script if available (Conan v2 often lacks python -m entrypoint).
-    find_program(CONAN_EXECUTABLE NAMES conan HINTS
-        "$ENV{VIRTUAL_ENV}/bin"
-        "$ENV{VIRTUAL_ENV}/Scripts"
-        NO_DEFAULT_PATH
-    )
-    if(NOT CONAN_EXECUTABLE)
-        find_program(CONAN_EXECUTABLE NAMES conan)
-    endif()
-
-    if(CONAN_EXECUTABLE)
-        set(_conan_cmd "${CONAN_EXECUTABLE}")
-        set(_conan_args profile detect --force)
     else()
-        set(_conan_cmd "${_conan_python}")
-        set(_conan_args -m conan profile detect --force)
+        set(_conan_python "python3")
+    endif()
+    message(STATUS "Usando o Python do sistema (ignorando .venv isolado): ${_conan_python}")
+endif()
+
+# Força todo o restante do projeto a usar o mesmo Python alinhado
+set(Python_EXECUTABLE "${_conan_python}" CACHE PATH "Forced Python executable" FORCE)
+set(Python3_EXECUTABLE "${_conan_python}" CACHE PATH "Forced Python3 executable" FORCE)
+
+# Se o venv for invalido, limpamos os HINTS para o CMake nao ler lixo local
+if(_venv_valid)
+    set(_search_hints "${_venv_bin}")
+else()
+    set(_search_hints "")
+endif()
+
+# =====================================================================
+# GARANTIA DO CYTHON
+# =====================================================================
+find_program(CYTHON_EXECUTABLE NAMES cython cython.exe HINTS ${_search_hints})
+if(NOT CYTHON_EXECUTABLE)
+    message(STATUS "Cython nao encontrado. Instalando automaticamente via pip...")
+    if(WIN32)
+        execute_process(COMMAND ${_conan_python} -m pip install cython --user)
+    else()
+        execute_process(COMMAND ${_conan_python} -m pip install cython)
+    endif()
+    
+    unset(CYTHON_EXECUTABLE CACHE)
+    find_program(CYTHON_EXECUTABLE NAMES cython cython.exe HINTS ${_search_hints} "/usr/local/bin" "/usr/bin" "$ENV{HOME}/.local/bin")
+endif()
+if(CYTHON_EXECUTABLE)
+    message(STATUS "Cython detectado em: ${CYTHON_EXECUTABLE}")
+endif()
+
+# =====================================================================
+# GARANTIA DO CONAN
+# =====================================================================
+set(CONAN_TOOLCHAIN_PATH "${CMAKE_BINARY_DIR}/conan_toolchain.cmake")
+
+if(NOT EXISTS "${CONAN_TOOLCHAIN_PATH}")
+    message(STATUS "Conan toolchain nao encontrado. Verificando dependencias...")
+
+    find_program(CONAN_EXECUTABLE NAMES conan HINTS ${_search_hints} "$ENV{VIRTUAL_ENV}/bin" "$ENV{VIRTUAL_ENV}/Scripts")
+
+    if(NOT CONAN_EXECUTABLE)
+        message(STATUS "Conan nao encontrado. Instalando automaticamente via pip...")
+        if(WIN32)
+            execute_process(COMMAND ${_conan_python} -m pip install conan --user)
+        else()
+            execute_process(COMMAND ${_conan_python} -m pip install conan)
+        endif()
+
+        unset(CONAN_EXECUTABLE CACHE)
+
+        if(WIN32)
+            find_program(CONAN_EXECUTABLE NAMES conan HINTS 
+                ${_search_hints}
+                "$ENV{APPDATA}/Python/Python311/Scripts"
+                "$ENV{USERPROFILE}/AppData/Roaming/Python/Python311/Scripts"
+            )
+        else()
+            find_program(CONAN_EXECUTABLE NAMES conan HINTS 
+                ${_search_hints} "/usr/local/bin" "/usr/bin" "$ENV{HOME}/.local/bin"
+            )
+        endif()
+
+        if(NOT CONAN_EXECUTABLE)
+            find_program(CONAN_EXECUTABLE NAMES conan)
+        endif()
+        
+        if(NOT CONAN_EXECUTABLE)
+            message(FATAL_ERROR "Falha critica: Conan foi instalado, mas o CMake nao encontrou o executavel valido.")
+        endif()
     endif()
 
-    # Ensure Conan has a default profile before install.
+    message(STATUS "Conan detectado e validado em: ${CONAN_EXECUTABLE}")
+
+    # Garante a criacao do perfil do Conan
     execute_process(
-        COMMAND ${_conan_cmd} ${_conan_args}
+        COMMAND ${CONAN_EXECUTABLE} profile detect --force
         WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}"
         RESULT_VARIABLE _conan_profile_result
     )
-    if(NOT _conan_profile_result EQUAL 0)
-        message(WARNING "Conan profile detect failed; continuing and letting Conan install report details.")
-    endif()
 
-    # Get Python include path
+    # Captura os diretórios de include do Python correto
     execute_process(
         COMMAND "${_conan_python}" -c "import sysconfig; print(sysconfig.get_path('include'))"
         OUTPUT_VARIABLE PYTHON_INCLUDE_DIR
         OUTPUT_STRIP_TRAILING_WHITESPACE
     )
     set(ENV{PYTHON_INCLUDE_DIR} "${PYTHON_INCLUDE_DIR}")
-    message(STATUS "PYTHON_INCLUDE_DIR set to: $ENV{PYTHON_INCLUDE_DIR}")
 
-    if(CONAN_EXECUTABLE)
-        execute_process(
-            COMMAND ${CMAKE_COMMAND} -E env
-                "PYTHON_INCLUDE_DIR=${PYTHON_INCLUDE_DIR}"
-                "${CONAN_EXECUTABLE}" install ${CMAKE_SOURCE_DIR}
-                    -pr:b=default
-                    -pr:h=default
-                    -s build_type=Debug
-                    --output-folder=${CMAKE_BINARY_DIR}
-                    --build=missing
-            WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}"
-            RESULT_VARIABLE _conan_result
-        )
-    else()
-        execute_process(
-            COMMAND ${CMAKE_COMMAND} -E env
-                "PYTHON_INCLUDE_DIR=${PYTHON_INCLUDE_DIR}"
-                "${_conan_python}" -m conan install ${CMAKE_SOURCE_DIR}
-                    -pr:b=default
-                    -pr:h=default
-                    -s build_type=Debug
-                    --output-folder=${CMAKE_BINARY_DIR}
-                    --build=missing
-            WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}"
-            RESULT_VARIABLE _conan_result
-        )
-    endif()
+    # Executa a instalacao das dependencias C++
+    execute_process(
+        COMMAND ${CMAKE_COMMAND} -E env
+            "PYTHON_INCLUDE_DIR=${PYTHON_INCLUDE_DIR}"
+            "${CONAN_EXECUTABLE}" install ${CMAKE_SOURCE_DIR}
+                -pr:b=default
+                -pr:h=default
+                -s build_type=${CMAKE_BUILD_TYPE}
+                -s compiler.cppstd=20
+                --output-folder=${CMAKE_BINARY_DIR}
+                --build=missing
+        WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}"
+        RESULT_VARIABLE _conan_result
+    )
+    
     if(NOT _conan_result EQUAL 0)
-        message(FATAL_ERROR "Conan install failed. Please check your Conan/.venv setup.")
+        message(FATAL_ERROR "O 'conan install' falhou. Verifique as configuracoes do seu ambiente.")
     endif()
 endif()
 
-# Conan/pybind11 integration
 include(${CONAN_TOOLCHAIN_PATH} OPTIONAL)
