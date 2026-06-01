@@ -9,6 +9,7 @@
 #include "../include/opf/Subgraph.hpp"
 #include <opf/KernelSubGraph.hpp>
 #include <opf/KernelJointProbability.hpp>
+#include <opf/OPFpp.hpp>
 #include "../include/opf/file.hpp"
 #include "../include/opf/Distance.hpp"
 #include "../include/opf/Utils.hpp"
@@ -18,6 +19,7 @@ namespace py = pybind11;
 using opf::Node;
 using opf::Subgraph;
 using opf::OPF;
+using opf::OPFpp;
 
 PYBIND11_MODULE(opfpy, m) {
     m.doc() = "OPF C++20 Python bindings";
@@ -158,12 +160,12 @@ PYBIND11_MODULE(opfpy, m) {
         .value("INVERSE_DISTANCE", OPF<float>::DensityEstimationMode::InverseDistance)
         .export_values();
 
-    py::class_<OPF<float>::KernelBestKResult>(m, "KernelBestKResult")
+    py::class_<opf::KernelBestKResult>(m, "KernelBestKResult")
         .def(py::init<>())
-        .def_readwrite("kernel_id", &OPF<float>::KernelBestKResult::kernel_id)
-        .def_readwrite("bestk", &OPF<float>::KernelBestKResult::bestk)
-        .def_readwrite("mincut", &OPF<float>::KernelBestKResult::mincut)
-        .def_readwrite("df_at_bestk", &OPF<float>::KernelBestKResult::df_at_bestk);
+        .def_readwrite("kernel_id", &opf::KernelBestKResult::kernel_id)
+        .def_readwrite("bestk", &opf::KernelBestKResult::bestk)
+        .def_readwrite("mincut", &opf::KernelBestKResult::mincut)
+        .def_readwrite("df_at_bestk", &opf::KernelBestKResult::df_at_bestk);
 
         py::class_<opf::KernelJointProbabilityAccumulator>(m, "KernelJointProbabilityAccumulator")
                .def(py::init<int, const std::vector<float>&>(),
@@ -241,18 +243,6 @@ PYBIND11_MODULE(opfpy, m) {
             py::arg("subgraph"), py::arg("kmin"), py::arg("kmax"),
             "Select best k by normalized cut minimization, then rebuild arcs and compute PDF. "
             "Mirrors opf_BestkMinCut from LibOPF.")
-        .def("bestk_min_cut_per_kernel", &OPF<float>::bestkMinCutPerKernel,
-            py::arg("kernels"), py::arg("kmin"), py::arg("kmax"),
-            "Run best-k minimization independently for each KernelSubGraph and return per-kernel results.")
-        .def("update_joint_probabilities_from_kernels", &OPF<float>::updateJointProbabilitiesFromKernels,
-            py::arg("kernels"), py::arg("accumulator"), py::arg("epsilon") = 1e-12f,
-            "Compute ln(dens) kernel probabilities and update central accumulator with replace semantics.")
-        .def("apply_joint_probabilities_to_subgraph", &OPF<float>::applyJointProbabilitiesToSubgraph,
-            py::arg("subgraph"), py::arg("accumulator"),
-            "Materialize central joint probabilities into subgraph dens/pathval.")
-        .def("cluster_with_joint_probabilities", &OPF<float>::clusterWithJointProbabilities,
-            py::arg("subgraph"), py::arg("accumulator"),
-            "Apply central joint probabilities and run standard clustering.")
         .def("cluster", &OPF<float>::clustering,
             py::arg("subgraph"),
             "Unsupervised OPF clustering in-place. Requires node dens and adj lists populated.")
@@ -284,6 +274,24 @@ PYBIND11_MODULE(opfpy, m) {
             "Iteratively prune irrelevant training nodes. desired_accuracy is the maximum "
             "allowed per-iteration accuracy drop (tolerance). Stops when the drop exceeds "
             "the tolerance or after 100 iterations. Returns the fraction of nodes removed.");
+
+    py::class_<OPFpp<float>, OPF<float>>(m, "OPFpp")
+        .def(py::init<>())
+        .def("bestk_min_cut_per_kernel", &OPFpp<float>::bestkMinCutPerKernel,
+            py::arg("kernels"), py::arg("kmin"), py::arg("kmax"),
+            "Run best-k minimization independently for each KernelSubGraph and return per-kernel results.")
+        .def("bestk_min_cut_per_stride_kernel", &OPFpp<float>::bestkMinCutPerStrideKernel,
+            py::arg("strided"), py::arg("kmin"), py::arg("kmax"),
+            "Run best-k minimization independently for each StridedSubgraph kernel slice and return per-kernel results.")
+        .def("update_joint_probabilities_from_kernels", &OPFpp<float>::updateJointProbabilitiesFromKernels,
+            py::arg("kernels"), py::arg("accumulator"), py::arg("epsilon") = 1e-12f,
+            "Compute ln(dens) kernel probabilities and update central accumulator with replace semantics.")
+        .def("apply_joint_probabilities_to_subgraph", &OPFpp<float>::applyJointProbabilitiesToSubgraph,
+            py::arg("subgraph"), py::arg("accumulator"),
+            "Materialize central joint probabilities into subgraph dens/pathval.")
+        .def("cluster_with_joint_probabilities", &OPFpp<float>::clusterWithJointProbabilities,
+            py::arg("subgraph"), py::arg("accumulator"),
+            "Apply central joint probabilities and run standard clustering.");
 
     // Propagate cluster labels from each node's root to all tree members
     m.def("propagate_cluster_labels", [](opf::Subgraph<float>& sg) {

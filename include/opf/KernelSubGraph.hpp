@@ -171,6 +171,8 @@ public:
             // Shallow-share the adjacency list
             auto adj_shared = std::make_shared<const std::vector<int>>(src_node.getAdj());
             nodes_.emplace_back(src_node, std::move(slice), std::move(adj_shared));
+            // Preserve source node position metadata from parent sg.
+            nodes_.back().setPosition(src_node.getPosition());
         }
     }
 

@@ -328,11 +328,13 @@ class TestKernelBestKModes(unittest.TestCase):
             self.skipTest("split_subgraph_into_kernels not available")
         if getattr(opfpy, "KernelBestKResult", None) is None:
             self.skipTest("KernelBestKResult not available in this build")
+        if getattr(opfpy, "OPFpp", None) is None:
+            self.skipTest("OPFpp not available in this build")
 
         sg = self._make_kernel_sensitive_subgraph()
         kernels = opfpy.split_subgraph_into_kernels(sg, [(0, 2), (2, 2), (4, 2)])
 
-        clf = opfpy.OPF()
+        clf = opfpy.OPFpp()
         results = clf.bestk_min_cut_per_kernel(kernels, 2, 4)
 
         self.assertEqual(len(results), 3)
@@ -454,11 +456,12 @@ class TestKernelJointProbabilities(unittest.TestCase):
     def test_cluster_with_joint_probabilities(self):
         split_fn = getattr(opfpy, "split_subgraph_into_kernels", None)
         accumulator_type = getattr(opfpy, "KernelJointProbabilityAccumulator", None)
-        if split_fn is None or accumulator_type is None:
+        opfpp_type = getattr(opfpy, "OPFpp", None)
+        if split_fn is None or accumulator_type is None or opfpp_type is None:
             self.skipTest("Joint probability APIs not available in this build")
 
         sg = self._make_joint_subgraph()
-        clf = opfpy.OPF()
+        clf = opfpp_type()
         clf.create_arcs(sg, 2)
         clf.compute_pdf(sg)
 

@@ -25,6 +25,7 @@ Quick-start
 
 import os
 import sys
+from types import SimpleNamespace
 
 # ---------------------------------------------------------------------------
 # Bootstrap: ensure the built extension (.pyd / .so) and helpers are findable
@@ -63,13 +64,6 @@ propagate_cluster_labels = _opfpy.propagate_cluster_labels
 read_subgraph = _opfpy.read_subgraph
 write_subgraph = _opfpy.write_subgraph
 split_subgraph = _opfpy.split_subgraph
-eucl_dist = _opfpy.eucl_dist
-chi_squared_dist = _opfpy.chi_squared_dist
-manhattan_dist = _opfpy.manhattan_dist
-canberra_dist = _opfpy.canberra_dist
-squared_chord_dist = _opfpy.squared_chord_dist
-squared_chi_squared_dist = _opfpy.squared_chi_squared_dist
-bray_curtis_dist = _opfpy.bray_curtis_dist
 subgraph_info = _opfpy.subgraph_info
 k_fold = _opfpy.k_fold
 merge_subgraphs = _opfpy.merge_subgraphs
@@ -92,15 +86,54 @@ KernelJointProbabilityAccumulator = getattr(_opfpy, "KernelJointProbabilityAccum
 
 from opfppy.node      import Node
 from opfppy.subgraph  import Subgraph
-from opfppy.opf_class import OPF
+from opfppy.opf_class import OPF, OPFpp
 
 # ---------------------------------------------------------------------------
 # Distance helpers
 # ---------------------------------------------------------------------------
 
-from opfppy.distance import DistanceMetric, resolve as resolve_distance, register as register_distance
+from opfppy.distance import (
+    DistanceMetric,
+    resolve as resolve_distance,
+    register as register_distance,
+    distance as _distance_fn,
+    eucl_dist as _eucl_dist_fn,
+    chi_squared_dist as _chi_squared_dist_fn,
+    manhattan_dist as _manhattan_dist_fn,
+    canberra_dist as _canberra_dist_fn,
+    squared_chord_dist as _squared_chord_dist_fn,
+    squared_chi_squared_dist as _squared_chi_squared_dist_fn,
+    bray_curtis_dist as _bray_curtis_dist_fn,
+)
 from opfppy.ply_adapter import encode_sh_params, decode_sh_params, subgraph_from_ply_file, SplatSubGraph
 from opfppy.colormap import label_rgb, build_palette, labels_to_rgb_array, load_colormap
+
+
+class _DistanceFacade(SimpleNamespace):
+    def __call__(self, features_a, features_b, metric=DistanceMetric.EUCLIDEAN):
+        return _distance_fn(features_a, features_b, metric)
+
+
+distance = _DistanceFacade(
+    eucl_dist=_eucl_dist_fn,
+    chi_squared_dist=_chi_squared_dist_fn,
+    manhattan_dist=_manhattan_dist_fn,
+    canberra_dist=_canberra_dist_fn,
+    squared_chord_dist=_squared_chord_dist_fn,
+    squared_chi_squared_dist=_squared_chi_squared_dist_fn,
+    bray_curtis_dist=_bray_curtis_dist_fn,
+    DistanceMetric=DistanceMetric,
+    resolve=resolve_distance,
+    register=register_distance,
+)
+
+eucl_dist = _eucl_dist_fn
+chi_squared_dist = _chi_squared_dist_fn
+manhattan_dist = _manhattan_dist_fn
+canberra_dist = _canberra_dist_fn
+squared_chord_dist = _squared_chord_dist_fn
+squared_chi_squared_dist = _squared_chi_squared_dist_fn
+bray_curtis_dist = _bray_curtis_dist_fn
 
 # ---------------------------------------------------------------------------
 # Re-export every free function from opfpy so callers never need to touch
@@ -109,12 +142,12 @@ from opfppy.colormap import label_rgb, build_palette, labels_to_rgb_array, load_
 
 
 # Explicitly export convenience submodules.
-from opfppy import supervised, unsupervised, utils, distance, node, subgraph, opf_class, ply_adapter, colormap
+from opfppy import supervised, unsupervised, utils, node, subgraph, opf_class, ply_adapter, colormap
 
 
 __all__ = [
     # Shim classes
-    "Node", "Subgraph", "OPF",
+    "Node", "Subgraph", "OPF", "OPFpp",
     # Distance helpers
     "DistanceMetric", "resolve_distance", "register_distance",
     # PLY adapter helpers

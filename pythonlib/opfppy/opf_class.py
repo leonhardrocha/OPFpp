@@ -25,6 +25,9 @@ from __future__ import annotations
 import functools
 import opfpy as _opfpy
 
+_RawOPF = _opfpy.OPF
+_RawOPFpp = getattr(_opfpy, "OPFpp", _RawOPF)
+
 
 class _OPFParentProxy:
     """Proxy that exposes a raw ``opfpy.OPF`` through Python methods/properties."""
@@ -61,7 +64,7 @@ class _OPFParentProxy:
 # Python shim class
 # ---------------------------------------------------------------------------
 
-class OPF(_opfpy.OPF):
+class OPF(_RawOPF):
     """Python-level wrapper around ``opfpy.OPF``.
 
     Inherits every pybind11 method from the C++ binding and adds a
@@ -115,3 +118,10 @@ class OPF(_opfpy.OPF):
         if not issubclass(subclass, cls):
             raise TypeError(f"{subclass!r} is not a subclass of OPF")
         cls._registry[name] = subclass
+
+
+class OPFpp(_RawOPFpp):
+    """Python-level wrapper around ``opfpy.OPFpp`` kernel-extension class."""
+
+    def __repr__(self) -> str:  # noqa: D105
+        return "OPFpp()"
