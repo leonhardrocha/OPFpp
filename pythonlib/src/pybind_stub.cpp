@@ -293,16 +293,42 @@ PYBIND11_MODULE(opfpy, m) {
         .def("compute_log_density_probabilities", &opf::KernelSubGraph<float>::computeLogDensityProbabilities, py::arg("epsilon") = 1e-12f)
         .def("to_subgraph", &opf::KernelSubGraph<float>::toSubgraph)
         
-        // ABORDAGEM 3: Permite ao script Python ler a lista de adjacência real do Kernel (overlay se houver, ou base)
-        .def("get_kernel_adj", [](const opf::KernelSubGraph<float>& self, int node_idx) {
-            return self.getKernelAdj(node_idx);
-        }, py::arg("node_idx"), "Obtém a lista de adjacências modificada para este kernel específico.")
+    // ========================================================================
+    // 1. EXTENSÕES DA CLASSE KERNELSUBGRAPH
+    // ========================================================================
+    
+    // ABORDAGEM 3: Permite ao script Python ler a lista de adjacência real do Kernel (overlay se houver, ou base)
+    .def("get_kernel_adj", [](const opf::KernelSubGraph<float>& self, int node_idx) {
+        return self.getKernelAdj(node_idx);
+    }, py::arg("node_idx"), "Obtém a lista de adjacências modificada para este kernel específico.")
 
-        // ABORDAGEM 3: Permite injetar e atualizar de forma centralizada e ultra rápida novas adjacências CoW via Python
-        .def("set_node_shared_adj", [](opf::KernelSubGraph<float>& self, int node_idx, const std::vector<int>& adj) {
-            self.setNodeSharedAdj(node_idx, std::make_shared<const std::vector<int>>(adj));
-        }, py::arg("node_idx"), py::arg("adj"), 
-           "Define diretamente o ponteiro de adjacência compartilhado CoW de forma centralizada.");
+    // ABORDAGEM 3: Permite injetar e atualizar de forma centralizada e ultra rápida novas adjacências CoW via Python
+    .def("set_node_shared_adj", [](opf::KernelSubGraph<float>& self, int node_idx, const std::vector<int>& adj) {
+        self.setNodeSharedAdj(node_idx, std::make_shared<const std::vector<int>>(adj));
+    }, py::arg("node_idx"), py::arg("adj"), 
+       "Define diretamente o ponteiro de adjacência compartilhado CoW de forma centralizada.");
+
+
+    // ========================================================================
+    // 2. EXTENSÕES DA CLASSE OPFPP VIA LAMBDAS (Resolve a sobrecarga ambígua)
+    // ========================================================================
+    
+    py::class_<opf::OPFpp<float>>(m, "OPFpp")
+        .def("clustering", [](opf::OPFpp<float>& self, opf::KernelSubGraph<float>& ksg) {
+            self.clustering(ksg);
+        }, py::arg("ksg"), "Executa o algoritmo de clustering OPF usando o KernelSubGraph informado.")
+         
+        .def("clustering_to_kmax", [](opf::OPFpp<float>& self, opf::KernelSubGraph<float>& ksg) {
+            self.clusteringToKmax(ksg);
+        }, py::arg("ksg"), "Executa o clustering ate o K maximo usando o KernelSubGraph informado.")
+         
+        .def("normalized_cut", [](opf::OPFpp<float>& self, opf::KernelSubGraph<float>& ksg) -> float {
+            return self.normalizedCut(ksg);
+        }, py::arg("ksg"), "Calcula o Normalized Cut para o KernelSubGraph informado.")
+         
+        .def("normalized_cut_to_kmax", [](opf::OPFpp<float>& self, opf::KernelSubGraph<float>& ksg) -> float {
+            return self.normalizedCutToKmax(ksg);
+        }, py::arg("ksg"), "Calcula o Normalized Cut ate o K maximo para o KernelSubGraph informado.");
 
     // ========================================================================
     // StridedSubgraph<float> Binding

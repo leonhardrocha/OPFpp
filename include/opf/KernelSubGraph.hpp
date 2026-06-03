@@ -190,6 +190,9 @@ namespace opf {
             return out;
         }
 
+        void clearOrderedListOfNodes() { ordered_list_of_nodes_.clear(); }
+        void addOrderedNode(int p) { ordered_list_of_nodes_.push_back(p); }
+        const std::vector<int>& getOrderedListOfNodes() const { return ordered_list_of_nodes_; }
         int featStart() const { return feat_start_; }
         int featEnd()   const { return feat_end_;   }
 
@@ -200,6 +203,7 @@ namespace opf {
         int nfeats_;
 
         std::vector<Node<T>> nodes_;
+        std::vector<int> ordered_list_of_nodes_;
 
         // Local COW scalar fields
         bool has_bestk_   = false; int   local_bestk_   = 0;
