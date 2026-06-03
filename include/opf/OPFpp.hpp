@@ -27,6 +27,169 @@ namespace opf {
         using OPF<T>::pdfToKmax;
         using OPF<T>::clusteringToKmax;
 
+        void clustering(KernelSubGraph<T>& ksg) {
+            std::vector<float> pathval(ksg.getNumNodes());
+            using Elem = std::pair<float, int>;
+            std::priority_queue<Elem, std::vector<Elem>> Q;
+
+            for (int p = 0; p < ksg.getNumNodes(); ++p) {
+                pathval[p] = ksg.getNode(p).getPathval();
+                ksg.getNode(p).setPred(-1); // NIL
+                ksg.getNode(p).setRoot(p);
+                Q.push({pathval[p], p});
+            }
+
+            int l = 0;
+            ksg.clearOrderedListOfNodes();
+            while (!Q.empty()) {
+                int p = Q.top().second;
+                Q.pop();
+                ksg.addOrderedNode(p);
+
+                if (ksg.getNode(p).getPred() == -1) {
+                    pathval[p] = ksg.getNode(p).getDens();
+                    ksg.getNode(p).setLabel(l++);
+                }
+
+                ksg.getNode(p).setPathval(pathval[p]);
+
+                for (int q : ksg.getKernelAdj(p)) {
+                    if (q < 0 || q >= ksg.getNumNodes()) continue; // bounds check
+                    float tmp = std::min(pathval[p], ksg.getNode(q).getDens());
+                    if (tmp > pathval[q]) {
+                        pathval[q] = tmp;
+                        ksg.getNode(q).setPred(p);
+                        ksg.getNode(q).setRoot(ksg.getNode(p).getRoot());
+                        ksg.getNode(q).setLabel(ksg.getNode(p).getLabel());
+                        Q.push({pathval[q], q});
+                    }
+                }
+            }
+            ksg.setNumLabels(l);
+        }
+
+        /// OPF clustering limited to the first bestk neighbors.
+        /// Mirrors opf_OPFClusteringToKmax.
+        void clusteringToKmax(KernelSubGraph<T>& ksg) {
+            const int n    = ksg.getNumNodes();
+            const int kmax = ksg.getBestK();
+
+            std::vector<float> pathval(n);
+            using Elem = std::pair<float, int>;
+            std::priority_queue<Elem, std::vector<Elem>> Q;  // max-heap
+
+            for (int p = 0; p < n; ++p) {
+                pathval[p] = ksg.getNode(p).getPathval();
+                ksg.getNode(p).setPred(NIL);
+                ksg.getNode(p).setRoot(p);
+                Q.push({pathval[p], p});
+            }
+
+            int l = 0;
+            ksg.clearOrderedListOfNodes();
+            while (!Q.empty()) {
+                auto [pv, p] = Q.top(); Q.pop();
+                ksg.addOrderedNode(p);
+
+                if (ksg.getNode(p).getPred() == NIL) {
+                    pathval[p] = ksg.getNode(p).getDens();
+                    ksg.getNode(p).setLabel(l++);
+                }
+                ksg.getNode(p).setPathval(pathval[p]);
+
+                const auto& adjList = ksg.getKernelAdj(p);
+                const int nadj = kmax + ksg.getNode(p).getNplatadj();
+                int k = 0;
+                for (int q : adjList) {
+                    if (k >= nadj) break;
+                    if (q < 0 || q >= n) { ++k; continue; }
+                    float tmp = std::min(pathval[p], ksg.getNode(q).getDens());
+                    if (tmp > pathval[q]) {
+                        pathval[q] = tmp;
+                        ksg.getNode(q).setPred(p);
+                        ksg.getNode(q).setRoot(ksg.getNode(p).getRoot());
+                        ksg.getNode(q).setLabel(ksg.getNode(p).getLabel());
+                        Q.push({pathval[q], q});
+                    }
+                    ++k;
+                }
+            }
+            ksg.setNumLabels(l);
+        }
+
+        // ---- Normalized cut -------------------------------------------------
+
+        /// Compute the normalised cut value over the full adjacency graph.
+        /// Mirrors opf_NormalizedCut from LibOPF.
+        float normalizedCut(KernelSubGraph<T>& ksg) {
+            const int n       = ksg.getNumNodes();
+            const int nlabels = ksg.getNumLabels();
+            std::vector<float> acumIC(nlabels, 0.0f);
+            std::vector<float> acumEC(nlabels, 0.0f);
+
+            for (int p = 0; p < n; ++p) {
+                for (int q : ksg.getKernelAdj(p)) {
+                    float dist = distance::euclDist<T>(*ksg.getNode(p).getFeat(), *ksg.getNode(q).getFeat());
+                    if (dist > 0.0f) {
+                        int lp = ksg.getNode(p).getLabel();
+                        int lq = ksg.getNode(q).getLabel();
+                        if (lp == lq)
+                            acumIC[lp] += 1.0f / dist;
+                        else {
+                            acumEC[lp] += 1.0f / dist;
+                            acumEC[lq] += 1.0f / dist;
+                        }
+                    }
+                }
+            }
+
+            float ncut = 0.0f;
+            for (int l = 0; l < nlabels; ++l) {
+                float denom = acumIC[l] + acumEC[l];
+                if (denom > 0.0f)
+                    ncut += acumEC[l] / denom;
+            }
+            return ncut;
+        }
+
+        /// Normalised cut limited to the first bestk neighbors.
+        /// Mirrors opf_NormalizedCutToKmax.
+        float normalizedCutToKmax(KernelSubGraph<T>& ksg) {
+            const int n      = ksg.getNumNodes();
+            const int nlabels = ksg.getNumLabels();
+            const int kmax   = ksg.getBestK();
+            std::vector<float> acumIC(nlabels, 0.0f);
+            std::vector<float> acumEC(nlabels, 0.0f);
+
+            for (int p = 0; p < n; ++p) {
+                const auto& adjList = ksg.getNode(p).getAdj();
+                const int nadj = kmax + ksg.getNode(p).getNplatadj();
+                int k = 0;
+                for (int q : adjList) {
+                    if (k >= nadj) break;
+                    float dist = distance::euclDist<T>(*ksg.getNode(p).getFeat(), *ksg.getNode(q).getFeat());
+                    if (dist > 0.0f) {
+                        int lp = ksg.getNode(p).getLabel();
+                        int lq = ksg.getNode(q).getLabel();
+                        if (lp == lq)
+                            acumIC[lp] += 1.0f / dist;
+                        else {
+                            acumEC[lp] += 1.0f / dist;
+                            acumEC[lq] += 1.0f / dist;
+                        }
+                    }
+                    ++k;
+                }
+            }
+
+            float ncut = 0.0f;
+            for (int l = 0; l < nlabels; ++l) {
+                float denom = acumIC[l] + acumEC[l];
+                if (denom > 0.0f) ncut += acumEC[l] / denom;
+            }
+            return ncut;
+        }
+
         std::vector<KernelBestKResult> bestkMinCutPerKernel(
             const std::vector<KernelSubGraph<T>>& kernels,
             int kmin,

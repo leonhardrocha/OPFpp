@@ -69,12 +69,14 @@ k_fold = _opfpy.k_fold
 merge_subgraphs = _opfpy.merge_subgraphs
 compute_distance_matrix = _opfpy.compute_distance_matrix
 write_distance_matrix = _opfpy.write_distance_matrix
-split_subgraph_into_kernels = getattr(_opfpy, "split_subgraph_into_kernels", None)
-KernelSubGraph = getattr(_opfpy, "KernelSubGraph", None)
-KernelBestKResult = getattr(_opfpy, "KernelBestKResult", None)
-AdjacencyMode = getattr(_opfpy, "AdjacencyMode", None)
-DensityEstimationMode = getattr(_opfpy, "DensityEstimationMode", None)
-KernelJointProbabilityAccumulator = getattr(_opfpy, "KernelJointProbabilityAccumulator", None)
+split_subgraph_into_kernels = _opfpy.split_subgraph_into_kernels
+KernelSubGraph = _opfpy.KernelSubGraph
+KernelBestKResult = _opfpy.KernelBestKResult
+AdjacencyMode = _opfpy.AdjacencyMode
+DensityEstimationMode = _opfpy.DensityEstimationMode
+KernelJointProbabilityAccumulator = _opfpy.KernelJointProbabilityAccumulator
+KernelLayout = _opfpy.KernelLayout
+StridedSubgraph = _opfpy.StridedSubgraph
 
 # ---------------------------------------------------------------------------
 # Python shim classes — Node, Subgraph, OPF
@@ -164,7 +166,7 @@ __all__ = [
     "compute_distance_matrix", "write_distance_matrix",
     "split_subgraph_into_kernels", "KernelSubGraph",
     "KernelBestKResult", "AdjacencyMode", "DensityEstimationMode",
-    "KernelJointProbabilityAccumulator",
+    "KernelJointProbabilityAccumulator", "KernelLayout", "StridedSubgraph",
     # Sub-modules
     "supervised", "unsupervised", "utils",
     "distance", "node", "subgraph", "opf_class", "ply_adapter", "colormap",

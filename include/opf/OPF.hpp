@@ -29,10 +29,10 @@ namespace opf {
             InverseDistance = 1,
         };
 
-    private:
+    protected:
         AdjacencyMode adjacency_mode_ = AdjacencyMode::LegacyKnn;
         DensityEstimationMode density_estimation_mode_ = DensityEstimationMode::Gaussian;
-
+    private:
         void mstPrototypes(Subgraph<T>& sg) {
             std::vector<float> pathval(sg.getNumNodes(), std::numeric_limits<float>::max());
             using Elem = std::pair<float, int>;
