@@ -302,40 +302,40 @@ namespace opf {
             const KernelJointProbabilityAccumulator& accumulator
         ) const {
             const int n = sg.getNumNodes();
-            const std::vector<float>& probs = accumulator.getCentralJointProbabilities();
-            if (static_cast<int>(probs.size()) != n) {
+            const std::vector<float>& joint_log_probs = accumulator.getCentralJointProbabilities();
+            
+            if (static_cast<int>(joint_log_probs.size()) != n) {
                 throw std::invalid_argument("Accumulator size must match subgraph node count");
             }
 
             if (n == 0) return;
 
-            float minprob = std::numeric_limits<float>::max();
-            float maxprob = std::numeric_limits<float>::lowest();
-            for (float p : probs) {
-                if (p < minprob) minprob = p;
-                if (p > maxprob) maxprob = p;
-            }
-
-            sg.setMinDens(minprob);
-            sg.setMaxDens(maxprob);
-
-            if (minprob == maxprob) {
-                for (int i = 0; i < n; ++i) {
-                    Node<T>& node = sg.getNode(i);
-                    node.setDens(this->opf_MAXDENS);
-                    node.setPathval(this->opf_MAXDENS - 1.0f);
-                }
-                return;
-            }
+            // Definição dos limites físicos rígidos e positivos do grafo OPF
+            const float L_min = 1.0f;
+            const float L_max = static_cast<float>(this->opf_MAXDENS);
 
             for (int i = 0; i < n; ++i) {
-                float norm = (probs[i] - minprob) / (maxprob - minprob);
-                norm = std::clamp(norm, 0.0f, 1.0f);
-                float dens = (this->opf_MAXDENS - 1.0f) * norm + 1.0f;
+                // 1. joint_log_probs[i] possui a densidade conjunta acumulada em espaço logarítmico (negativo).
+                // 2. Transforma para o espaço de probabilidade linear [0.0, 1.0] eliminando o sinal negativo.
+                float joint_prob = std::exp(joint_log_probs[i]);
+                
+                // Proteção numérica contra eventuais overflows/underflows antes do mapeamento
+                joint_prob = std::clamp(joint_prob, 0.0f, 1.0f);
+
+                // 3. Mapeamento monotônico direto para o intervalo regulamentar do OPF [1.0, opf_MAXDENS].
+                // Esta transformação NÃO muda de formato entre iterações, garantindo a consistência do EM.
+                float dens = L_min + (L_max - L_min) * joint_prob;
+
                 Node<T>& node = sg.getNode(i);
                 node.setDens(dens);
+                
+                // O pathval do IFT opera baseado na capacidade física positiva injetada
                 node.setPathval(dens - 1.0f);
             }
+
+            // Alinha os metadados do subgrafo com os limites absolutos da escala do espaço
+            sg.setMinDens(L_min);
+            sg.setMaxDens(L_max);
         }
 
         void clusterWithJointProbabilities(
@@ -344,6 +344,55 @@ namespace opf {
         ) {
             applyJointProbabilitiesToSubgraph(sg, accumulator);
             clustering(sg);
+        }
+
+        void intersectKernelAdjacencies(std::vector<opf::KernelSubGraph<T>>& kernels) {
+            if (kernels.size() <= 1) {
+                return; // Nenhuma interseção multi-kernel necessária
+            }
+
+            // Assume-se que todos os kernels possuem a mesma quantidade de nós (nnodes)
+            int num_nodes = kernels[0].getNumNodes();
+
+            // Iteramos por cada ID de nó (índice i de 0 até nnodes-1)
+            for (int i = 0; i < num_nodes; ++i) {
+                
+                // 1. CORREÇÃO ABORDAGEM 3: Lê através do getKernelAdj para capturar possíveis overlays ativos
+                // Coleta e ordena a adjacência atual real do nó 'i' no primeiro kernel
+                std::vector<int> current_intersection = kernels[0].getKernelAdj(i); 
+                std::sort(current_intersection.begin(), current_intersection.end());
+
+                // 2. Intersecciona sucessivamente com a adjacência do nó 'i' dos demais kernels
+                for (size_t k = 1; k < kernels.size(); ++k) {
+                    // CORREÇÃO ABORDAGEM 3: Sempre ler via getKernelAdj do respectivo Kernel
+                    std::vector<int> next_adj = kernels[k].getKernelAdj(i);
+                    std::sort(next_adj.begin(), next_adj.end());
+
+                    std::vector<int> temp_result;
+                    temp_result.reserve(std::min(current_intersection.size(), next_adj.size()));
+
+                    std::set_intersection(
+                        current_intersection.begin(), current_intersection.end(),
+                        next_adj.begin(), next_adj.end(),
+                        std::back_inserter(temp_result)
+                    );
+
+                    current_intersection = std::move(temp_result);
+                    
+                    if (current_intersection.empty()) {
+                        break;
+                    }
+                }
+
+                // 3. CORREÇÃO ABORDAGEM 3: Alocação única e compartilhamento via ponteiro CoW centralizado.
+                // Criamos um único ponteiro compartilhado para o resultado da interseção deste nó.
+                auto shared_intersection_result = std::make_shared<const std::vector<int>>(std::move(current_intersection));
+
+                // Injeta o mesmo ponteiro em todos os kernels em tempo O(1), sem cópias de memória!
+                for (size_t k = 0; k < kernels.size(); ++k) {
+                    kernels[k].setNodeSharedAdj(i, shared_intersection_result);
+                }
+            }
         }
     };
 

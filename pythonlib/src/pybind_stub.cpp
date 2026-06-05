@@ -268,7 +268,25 @@ PYBIND11_MODULE(opfpy, m) {
         .def("bestk_min_cut_per_stride_kernel", &OPFpp<float>::bestkMinCutPerStrideKernel, py::arg("strided"), py::arg("kmin"), py::arg("kmax"))
         .def("update_joint_probabilities_from_kernels", &OPFpp<float>::updateJointProbabilitiesFromKernels, py::arg("kernels"), py::arg("accumulator"), py::arg("epsilon") = 1e-12f)
         .def("apply_joint_probabilities_to_subgraph", &OPFpp<float>::applyJointProbabilitiesToSubgraph, py::arg("subgraph"), py::arg("accumulator"))
-        .def("cluster_with_joint_probabilities", &OPFpp<float>::clusterWithJointProbabilities, py::arg("subgraph"), py::arg("accumulator"));
+        .def("cluster_with_joint_probabilities", &OPFpp<float>::clusterWithJointProbabilities, py::arg("subgraph"), py::arg("accumulator"))
+    // ========================================================================
+    // 2. EXTENSÕES DA CLASSE OPFPP VIA LAMBDAS (Resolve a sobrecarga ambígua)
+    // ========================================================================
+        .def("clustering", [](opf::OPFpp<float>& self, opf::KernelSubGraph<float>& ksg) {
+            self.clustering(ksg);
+        }, py::arg("ksg"), "Executa o algoritmo de clustering OPF usando o KernelSubGraph informado.")
+         
+        .def("clustering_to_kmax", [](opf::OPFpp<float>& self, opf::KernelSubGraph<float>& ksg) {
+            self.clusteringToKmax(ksg);
+        }, py::arg("ksg"), "Executa o clustering ate o K maximo usando o KernelSubGraph informado.")
+         
+        .def("normalized_cut", [](opf::OPFpp<float>& self, opf::KernelSubGraph<float>& ksg) -> float {
+            return self.normalizedCut(ksg);
+        }, py::arg("ksg"), "Calcula o Normalized Cut para o KernelSubGraph informado.")
+         
+        .def("normalized_cut_to_kmax", [](opf::OPFpp<float>& self, opf::KernelSubGraph<float>& ksg) -> float {
+            return self.normalizedCutToKmax(ksg);
+        }, py::arg("ksg"), "Calcula o Normalized Cut ate o K maximo para o KernelSubGraph informado.");
 
     // ========================================================================
     // KernelSubGraph<float> Binding (Abordagem 3 - Sem Proxies de Nós)
@@ -309,26 +327,7 @@ PYBIND11_MODULE(opfpy, m) {
        "Define diretamente o ponteiro de adjacência compartilhado CoW de forma centralizada.");
 
 
-    // ========================================================================
-    // 2. EXTENSÕES DA CLASSE OPFPP VIA LAMBDAS (Resolve a sobrecarga ambígua)
-    // ========================================================================
     
-    py::class_<opf::OPFpp<float>>(m, "OPFpp")
-        .def("clustering", [](opf::OPFpp<float>& self, opf::KernelSubGraph<float>& ksg) {
-            self.clustering(ksg);
-        }, py::arg("ksg"), "Executa o algoritmo de clustering OPF usando o KernelSubGraph informado.")
-         
-        .def("clustering_to_kmax", [](opf::OPFpp<float>& self, opf::KernelSubGraph<float>& ksg) {
-            self.clusteringToKmax(ksg);
-        }, py::arg("ksg"), "Executa o clustering ate o K maximo usando o KernelSubGraph informado.")
-         
-        .def("normalized_cut", [](opf::OPFpp<float>& self, opf::KernelSubGraph<float>& ksg) -> float {
-            return self.normalizedCut(ksg);
-        }, py::arg("ksg"), "Calcula o Normalized Cut para o KernelSubGraph informado.")
-         
-        .def("normalized_cut_to_kmax", [](opf::OPFpp<float>& self, opf::KernelSubGraph<float>& ksg) -> float {
-            return self.normalizedCutToKmax(ksg);
-        }, py::arg("ksg"), "Calcula o Normalized Cut ate o K maximo para o KernelSubGraph informado.");
 
     // ========================================================================
     // StridedSubgraph<float> Binding
@@ -345,7 +344,7 @@ PYBIND11_MODULE(opfpy, m) {
         .def("compute_log_density_probabilities", &opf::StridedSubgraph<float>::computeLogDensityProbabilities, py::arg("kernel_id"), py::arg("epsilon") = 1e-12f)
         .def("make_kernel_copy", &opf::StridedSubgraph<float>::makeKernelCopy, py::arg("kernel_id"));
 
-    // Free functions Globais
+    // Free functions: OPF training-format file I/O (truelabel/position/pathval/features)
     m.def("propagate_cluster_labels", [](opf::Subgraph<float>& sg) {
         for (int i = 0; i < sg.getNumNodes(); ++i) {
             int root = sg.getNode(i).getRoot();
@@ -361,11 +360,13 @@ PYBIND11_MODULE(opfpy, m) {
         opf::Subgraph<float> sg;
         opf::readSubgraph<float>(filename, sg);
         return sg;
-    }, py::arg("filename"));
+    }, py::arg("filename"),
+       "Read a Subgraph from the OPF training binary format (truelabel, position, pathval, features).");
 
     m.def("write_subgraph", [](const std::string& filename, const opf::Subgraph<float>& sg) {
         opf::writeSubgraph<float>(filename, sg);
-    }, py::arg("filename"), py::arg("subgraph"));
+    }, py::arg("filename"), py::arg("subgraph"),
+       "Write a Subgraph to the OPF training binary format.");
 
     m.def("split_subgraph", [](const opf::Subgraph<float>& original, float percentage_first) {
         opf::Subgraph<float> first;
@@ -373,16 +374,28 @@ PYBIND11_MODULE(opfpy, m) {
         opf::Subgraph<float> original_copy = original;
         opf::split<float>(original_copy, first, second, percentage_first);
         return py::make_tuple(first, second);
-    }, py::arg("original_subgraph"), py::arg("percentage_first"));
+    }, py::arg("original_subgraph"), py::arg("percentage_first"),
+       "Split a subgraph into two label-stratified subgraphs.");
 
-    // Distances
-    m.def("eucl_dist", &opf::distance::euclDist<float>);
-    m.def("chi_squared_dist", &opf::distance::chiSquaredDist<float>);
-    m.def("manhattan_dist", &opf::distance::manhattanDist<float>);
-    m.def("canberra_dist", &opf::distance::canberraDist<float>);
-    m.def("squared_chord_dist", &opf::distance::squaredChordDist<float>);
-    m.def("squared_chi_squared_dist", &opf::distance::squaredChiSquaredDist<float>);
-    m.def("bray_curtis_dist", &opf::distance::brayCurtisDist<float>);
+    // Distance functions for float specialization
+    m.def("eucl_dist", &opf::distance::euclDist<float>, "Euclidean distance between two float vectors");
+    m.def("chi_squared_dist", &opf::distance::chiSquaredDist<float>, "Chi-Squared distance between two float vectors");
+    m.def("manhattan_dist", &opf::distance::manhattanDist<float>, "Manhattan distance between two float vectors");
+    m.def("canberra_dist", &opf::distance::canberraDist<float>, "Canberra distance between two float vectors");
+    m.def("squared_chord_dist", &opf::distance::squaredChordDist<float>, "Squared Chord distance between two float vectors");
+    m.def("squared_chi_squared_dist", &opf::distance::squaredChiSquaredDist<float>, "Squared Chi-Squared distance between two float vectors");
+    m.def("bray_curtis_dist", &opf::distance::brayCurtisDist<float>, "Bray-Curtis distance between two float vectors");
+
+    // Distance functions for double specialization
+    m.def("eucl_dist_double", &opf::distance::euclDist<double>, "Euclidean distance between two double vectors");
+    m.def("chi_squared_dist_double", &opf::distance::chiSquaredDist<double>, "Chi-Squared distance between two double vectors");
+    m.def("manhattan_dist_double", &opf::distance::manhattanDist<double>, "Manhattan distance between two double vectors");
+    m.def("canberra_dist_double", &opf::distance::canberraDist<double>, "Canberra distance between two double vectors");
+    m.def("squared_chord_dist_double", &opf::distance::squaredChordDist<double>, "Squared Chord distance between two double vectors");
+    m.def("squared_chi_squared_dist_double", &opf::distance::squaredChiSquaredDist<double>, "Squared Chi-Squared distance between two double vectors");
+    m.def("bray_curtis_dist_double", &opf::distance::brayCurtisDist<double>, "Bray-Curtis distance between two double vectors");
+
+    // Phase 5: utility free functions
 
     m.def("subgraph_info", [](const opf::Subgraph<float>& sg) {
         py::dict info;
@@ -390,10 +403,104 @@ PYBIND11_MODULE(opfpy, m) {
         info["nlabels"] = sg.getNumLabels();
         info["nfeats"]  = sg.getNumFeats();
         return info;
-    }, py::arg("subgraph"));
+    }, py::arg("subgraph"),
+       "Return a dict with nnodes, nlabels, and nfeats for the given subgraph.");
 
+    m.def("k_fold", [](opf::Subgraph<float>& sg, int k) {
+        return opf::kFold<float>(sg, k);
+    }, py::arg("subgraph"), py::arg("k"),
+       "Stratified k-fold partition of a subgraph. Returns a list of k Subgraph objects.");
+
+    m.def("merge_subgraphs", [](const opf::Subgraph<float>& sg1, const opf::Subgraph<float>& sg2) {
+        return opf::Subgraph<float>::merge(sg1, sg2);
+    }, py::arg("subgraph1"), py::arg("subgraph2"),
+       "Merge two subgraphs with the same number of features into one.");
+
+    m.def("compute_distance_matrix", [](const opf::Subgraph<float>& sg, int distance_id) {
+        int n = sg.getNumNodes();
+        std::vector<std::vector<float>> mat(n, std::vector<float>(n, 0.0f));
+        for (int i = 0; i < n; ++i) {
+            for (int j = i + 1; j < n; ++j) {
+                const auto& fi = *sg.getNode(i).getFeat();
+                const auto& fj = *sg.getNode(j).getFeat();
+                float d = 0.0f;
+                switch (distance_id) {
+                    case 1: d = opf::distance::euclDist(fi, fj); break;
+                    case 2: d = opf::distance::chiSquaredDist(fi, fj); break;
+                    case 3: d = opf::distance::manhattanDist(fi, fj); break;
+                    case 4: d = opf::distance::canberraDist(fi, fj); break;
+                    case 5: d = opf::distance::squaredChordDist(fi, fj); break;
+                    case 6: d = opf::distance::squaredChiSquaredDist(fi, fj); break;
+                    case 7: d = opf::distance::brayCurtisDist(fi, fj); break;
+                    default: throw std::invalid_argument("Invalid distance_id (must be 1-7).");
+                }
+                mat[i][j] = d;
+                mat[j][i] = d;
+            }
+        }
+        return mat;
+    }, py::arg("subgraph"), py::arg("distance_id") = 1,
+       "Compute NxN pairwise distance matrix. distance_id: 1=Euclidean, 2=Chi-Square, 3=Manhattan, 4=Canberra, 5=SquaredChord, 6=SquaredChiSquared, 7=BrayCurtis.");
+
+    m.def("write_distance_matrix", [](const std::string& filename,
+                                      const opf::Subgraph<float>& sg,
+                                      int distance_id) {
+        int n = sg.getNumNodes();
+        std::vector<std::vector<float>> mat(n, std::vector<float>(n, 0.0f));
+        for (int i = 0; i < n; ++i) {
+            for (int j = i + 1; j < n; ++j) {
+                const auto& fi = *sg.getNode(i).getFeat();
+                const auto& fj = *sg.getNode(j).getFeat();
+                float d = 0.0f;
+                switch (distance_id) {
+                    case 1: d = opf::distance::euclDist(fi, fj); break;
+                    case 2: d = opf::distance::chiSquaredDist(fi, fj); break;
+                    case 3: d = opf::distance::manhattanDist(fi, fj); break;
+                    case 4: d = opf::distance::canberraDist(fi, fj); break;
+                    case 5: d = opf::distance::squaredChordDist(fi, fj); break;
+                    case 6: d = opf::distance::squaredChiSquaredDist(fi, fj); break;
+                    case 7: d = opf::distance::brayCurtisDist(fi, fj); break;
+                    default: throw std::invalid_argument("Invalid distance_id (must be 1-7).");
+                }
+                mat[i][j] = d;
+                mat[j][i] = d;
+            }
+        }
+        std::ofstream out(filename, std::ios::binary);
+        if (!out.is_open()) throw std::runtime_error("Cannot open file: " + filename);
+        out.write(reinterpret_cast<const char*>(&n), sizeof(int));
+        for (int i = 0; i < n; ++i)
+            out.write(reinterpret_cast<const char*>(mat[i].data()), n * sizeof(float));
+    }, py::arg("filename"), py::arg("subgraph"), py::arg("distance_id") = 1,
+       "Compute and write pairwise distance matrix to a binary file (int nnodes + float NxN).");
+
+    m.def("read_distance_matrix", [](const std::string& filename) {
+        std::ifstream in(filename, std::ios::binary);
+        if (!in.is_open()) throw std::runtime_error("Cannot open file: " + filename);
+        int n = 0;
+        in.read(reinterpret_cast<char*>(&n), sizeof(int));
+        std::vector<std::vector<float>> mat(n, std::vector<float>(n));
+        for (int i = 0; i < n; ++i)
+            in.read(reinterpret_cast<char*>(mat[i].data()), n * sizeof(float));
+        return mat;
+    }, py::arg("filename"),
+       "Read a precomputed distance matrix from a binary file. Returns list of lists of float.");
+
+    // -----------------------------------------------------------------------
+    // split_subgraph_into_kernels — free function
+    //
+    // IMPORTANT: the source Subgraph must remain alive for the lifetime of
+    // every returned KernelSubGraph.  py::keep_alive<0,1>() keeps the source
+    // alive as long as the returned list object is alive.  Callers should
+    // store the source Subgraph alongside the returned list (e.g., as a tuple).
+    // -----------------------------------------------------------------------
     m.def("split_subgraph_into_kernels",
         [](opf::Subgraph<float>& sg, const std::vector<std::pair<int, int>>& slices) {
             return opf::splitSubgraphIntoKernels<float>(sg, slices);
-        }, py::arg("subgraph"), py::arg("slices"), py::keep_alive<0, 1>());
+        },
+        py::arg("subgraph"), py::arg("slices"),
+        "Split a Subgraph into KernelSubGraph objects by explicit (offset, size) slices.\n"
+        "Each entry in slices is a (offset, size) pair, producing a kernel covering\n"
+        "features [offset, offset+size). The source subgraph must stay alive for the\n"
+        "lifetime of the returned kernels.");
 }
