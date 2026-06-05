@@ -268,7 +268,8 @@ PYBIND11_MODULE(opfpy, m) {
         .def("bestk_min_cut_per_stride_kernel", &OPFpp<float>::bestkMinCutPerStrideKernel, py::arg("strided"), py::arg("kmin"), py::arg("kmax"))
         .def("update_joint_probabilities_from_kernels", &OPFpp<float>::updateJointProbabilitiesFromKernels, py::arg("kernels"), py::arg("accumulator"), py::arg("epsilon") = 1e-12f)
         .def("apply_joint_probabilities_to_subgraph", &OPFpp<float>::applyJointProbabilitiesToSubgraph, py::arg("subgraph"), py::arg("accumulator"))
-        .def("cluster_with_joint_probabilities", &OPFpp<float>::clusterWithJointProbabilities, py::arg("subgraph"), py::arg("accumulator"))
+        .def("cluster_with_joint_probabilities", &OPFpp<float>::clusterWithJointProbabilities, py::arg("subgraph"), py::arg("accumulator"), py::arg("kernels"))
+        .def("intersect_kernel_adjacencies", &opf::OPFpp<float>::intersectKernelAdjacencies, py::arg("kernels"))
     // ========================================================================
     // 2. EXTENSÕES DA CLASSE OPFPP VIA LAMBDAS (Resolve a sobrecarga ambígua)
     // ========================================================================
@@ -279,6 +280,10 @@ PYBIND11_MODULE(opfpy, m) {
         .def("clustering_to_kmax", [](opf::OPFpp<float>& self, opf::KernelSubGraph<float>& ksg) {
             self.clusteringToKmax(ksg);
         }, py::arg("ksg"), "Executa o clustering ate o K maximo usando o KernelSubGraph informado.")
+
+        .def("joint_clustering_to_kmax", [](opf::OPFpp<opf::KernelLayout>& self, opf::Subgraph<opf::KernelLayout>& sg, const std::vector<opf::KernelSubGraph<opf::KernelLayout>>& kernels) {
+            self.jointClusteringToKmax(sg, kernels);
+        }, py::arg("sg"), py::arg("kernels"), "Executa o clustering conjunto aplicando restricoes espaciais on-the-fly a partir de multiplos kernels.")
          
         .def("normalized_cut", [](opf::OPFpp<float>& self, opf::KernelSubGraph<float>& ksg) -> float {
             return self.normalizedCut(ksg);
@@ -503,4 +508,5 @@ PYBIND11_MODULE(opfpy, m) {
         "Each entry in slices is a (offset, size) pair, producing a kernel covering\n"
         "features [offset, offset+size). The source subgraph must stay alive for the\n"
         "lifetime of the returned kernels.");
+
 }

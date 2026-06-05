@@ -164,7 +164,9 @@ __all__ = [
     "squared_chord_dist", "squared_chi_squared_dist", "bray_curtis_dist",
     "subgraph_info", "k_fold", "merge_subgraphs",
     "compute_distance_matrix", "write_distance_matrix",
-    "split_subgraph_into_kernels", "KernelSubGraph",
+    "split_subgraph_into_kernels",
+    # Helper classes from the low-level extension
+    "KernelSubGraph",
     "KernelBestKResult", "AdjacencyMode", "DensityEstimationMode",
     "KernelJointProbabilityAccumulator", "KernelLayout", "StridedSubgraph",
     # Sub-modules
