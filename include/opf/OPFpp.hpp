@@ -239,6 +239,101 @@ namespace opf {
             return results;
         }
 
+        void clusteringWithRandomLabels(Subgraph<T>& sg, int num_samples, int num_labels) {
+            if (num_labels <= 0 || num_samples <= 0) {
+                throw std::invalid_argument("O numero de amostras e labels deve ser maior que 0.");
+            }
+            if (num_labels > num_samples) {
+                throw std::invalid_argument("O numero de labels nao pode ser maior que o numero de amostras.");
+            }
+            if (num_samples > sg.getNumNodes()) {
+                throw std::invalid_argument("O numero de amostras nao pode exceder o total de nos do grafo.");
+            }
+
+            const int total_nodes = sg.getNumNodes();
+            
+            // 1. Inicializa as estruturas de controle com valores vazios/padrão
+            // Usamos -1.0f para indicar que o nó ainda não foi conquistado por nenhuma árvore
+            std::vector<float> pathval(total_nodes, -1.0f); 
+            using Elem = std::pair<float, int>;
+            std::priority_queue<Elem, std::vector<Elem>> Q;
+            float max_density = std::numeric_limits<float>::lowest();
+
+            computePDF(sg); // Garante que as densidades estejam atualizadas antes de iniciar a conquista
+            for (int p = 0; p < total_nodes; ++p) {
+                sg.getNode(p).setPred(-1); // NIL
+                sg.getNode(p).setRoot(-1);
+                sg.getNode(p).setLabel(-1);
+                max_density = std::max(max_density, sg.getNode(p).getDens());
+            }
+
+            // 2. Sorteia uniformemente 'num_samples' nós únicos do grafo
+            std::vector<int> all_indices(total_nodes);
+            std::iota(all_indices.begin(), all_indices.end(), 0); // Preenche de 0 a total_nodes-1
+            
+            std::random_device rd;
+            std::mt19937 gen(rd());
+            std::shuffle(all_indices.begin(), all_indices.end(), gen);
+
+            // 3. Geração e distribuição dos labels fixos mapeados para as amostras
+            std::vector<int> sample_labels(num_samples);
+            
+            // Garante que TODOS os 'num_labels' sejam usados pelo menos uma vez (evita labels órfãos)
+            for (int i = 0; i < num_labels; ++i) {
+                sample_labels[i] = i;
+            }
+            // Preenche o restante das vagas das amostras com escolhas puramente aleatórias
+            std::uniform_int_distribution<int> dis(0, num_labels - 1);
+            for (int i = num_labels; i < num_samples; ++i) {
+                sample_labels[i] = dis(gen);
+            }
+            // Embaralha o vetor de labels para que a garantia inicial se misture nas amostras sorteadas
+            std::shuffle(sample_labels.begin(), sample_labels.end(), gen);
+
+            // 4. Injeta as Sementes (Seeds) na Fila de Prioridades
+            for (int i = 0; i < num_samples; ++i) {
+                int p = all_indices[i];       // Índice do nó sorteado do grafo
+                int lbl = sample_labels[i];   // Label sorteado atribuído a ele
+                
+                sg.getNode(p).setRoot(p);
+                sg.getNode(p).setLabel(lbl);
+                pathval[p] = max_density; // Sementes iniciam com sua própria densidade mestre
+                
+                Q.push({pathval[p], p});
+            }
+
+            // 5. Execução do Image Foresting Transform (IFT) por Conquista Florestal
+            sg.clearOrderedListOfNodes();
+            while (!Q.empty()) {
+                auto [p_val, p] = Q.top();
+                Q.pop();
+
+                // Relaxação de Dijkstra: ignora registros obsoletos se um caminho melhor já passou por 'p'
+                if (p_val < pathval[p]) continue;
+
+                sg.addOrderedNode(p);
+                sg.getNode(p).setPathval(pathval[p]);
+
+                for (int q : sg.getNode(p).getAdj()) {
+                    if (q < 0 || q >= total_nodes) continue; // bounds check
+
+                    // Função de conectividade clássica do OPF (Min-Max path)
+                    float tmp = std::min(pathval[p], sg.getNode(q).getDens());
+                    
+                    if (tmp > pathval[q]) {
+                        pathval[q] = tmp;
+                        sg.getNode(q).setPred(p);
+                        sg.getNode(q).setRoot(sg.getNode(p).getRoot());
+                        sg.getNode(q).setLabel(sg.getNode(p).getLabel()); // Propaga o label aleatório original
+                        Q.push({pathval[q], q});
+                    }
+                }
+            }
+            
+            // Atualiza o metadado global do número de labels ativos no grafo
+            sg.setNumLabels(num_labels);
+        }
+
         std::vector<KernelBestKResult> bestkMinCutPerStrideKernel(
             const StridedSubgraph<T>& strided,
             int kmin,
@@ -328,10 +423,7 @@ namespace opf {
                 float dens = L_min + (L_max - L_min) * joint_prob;
 
                 Node<T>& node = sg.getNode(i);
-                node.setDens(dens);
-                
-                // O pathval do IFT opera baseado na capacidade física positiva injetada
-                node.setPathval(dens - 1.0f);
+                node.setDens(dens);                
             }
 
             // Alinha os metadados do subgrafo com os limites absolutos da escala do espaço
@@ -341,67 +433,56 @@ namespace opf {
 
         /// OPF clustering no subgrafo original, com caminhos restritos pela 
         /// interseção implícita das vizinhanças de múltiplos kernels.
-        void jointClusteringToKmax(Subgraph<T>& sg, const std::vector<KernelSubGraph<T>>& kernels) {
-            if (kernels.empty()) return;
+            void jointKernelsClustering(Subgraph<T>& sg, const std::vector<KernelSubGraph<T>>& kernels) {
+                if (kernels.empty()) return;
 
-            const int n    = sg.getNumNodes();
-            // Utiliza o kmax do primeiro kernel como limite de busca base
-            const int kmax = kernels[0].getBestK();
-
-            std::vector<float> pathval(n);
-            using Elem = std::pair<float, int>;
-            std::priority_queue<Elem, std::vector<Elem>> Q;  // max-heap
-
-            // Inicialização no subgrafo original
-            for (int p = 0; p < n; ++p) {
-                pathval[p] = sg.getNode(p).getPathval();
-                sg.getNode(p).setPred(NIL);
-                sg.getNode(p).setRoot(p);
-                Q.push({pathval[p], p});
-            }
-
-            int l = 0;
-            sg.clearOrderedListOfNodes(); 
-            
-            while (!Q.empty()) {
-                auto [pv, p] = Q.top(); Q.pop();
-                sg.addOrderedNode(p);
-
-                // Checa se é uma raiz/máximo local
-                if (sg.getNode(p).getPred() == NIL) {
-                    pathval[p] = sg.getNode(p).getDens();
-                    sg.getNode(p).setLabel(l++);
-                }
-                sg.getNode(p).setPathval(pathval[p]);
-
-                // 1. Pega a adjacência base a partir do primeiro kernel
-                const auto& adjListBase = kernels[0].getKernelAdj(p);
-                const int nadj = kmax + sg.getNode(p).getNplatadj();
-                int k = 0;
+                const int n    = sg.getNumNodes();
                 
-                for (int q : adjListBase) {
-                    if (k >= nadj) break;
-                    if (q < 0 || q >= n) { ++k; continue; }
+                std::vector<float> pathval(n);
+                using Elem = std::pair<float, int>;
+                std::priority_queue<Elem, std::vector<Elem>> Q;  // max-heap
 
-                    // =================================================================
-                    // INTERSEÇÃO IMPLÍCITA ON-THE-FLY
-                    // Verifica se 'q' é vizinho de 'p' em TODOS os outros kernels
-                    // =================================================================
-                    bool is_valid_in_all_kernels = true;
-                    for (size_t ki = 1; ki < kernels.size(); ++ki) {
-                        const auto& other_adj = kernels[ki].getKernelAdj(p);
-                        
-                        // Busca linear rápida (ideal para vetores pequenos típicos do kmax)
-                        auto it = std::find(other_adj.begin(), other_adj.end(), q);
-                        if (it == other_adj.end()) {
-                            is_valid_in_all_kernels = false;
-                            break; // Aborta cedo: 'q' não está na interseção
-                        }
+                // Initially, all nodes are unconquered (pathval = -inf) and will only be conquered if at least one kernel allows the connection via its adjacency.
+                // The initial seeds for the clustering will be determined by the original densities of the subgraph, while the path constraints will be governed by the intersection of the kernels' adjacencies.
+                for (int p = 0; p < n; ++p) {
+                    if (sg.getNode(p).getPred() == NIL) {
+                        pathval[p] = sg.getNode(p).getDens();
                     }
+                    else
+                    {
+                        pathval[p] = std::numeric_limits<float>::lowest();
+                    }                
+                    Q.push({pathval[p], p});
+                }
+                int l = 0;
+                sg.clearOrderedListOfNodes(); 
+                
+                while (!Q.empty()) {
+                    auto [pv, p] = Q.top(); Q.pop();
+                    sg.addOrderedNode(p);
 
-                    // Se 'q' sobreviveu ao filtro de interseção, avalia o caminho
-                    if (is_valid_in_all_kernels) {
-                        float tmp = std::min(pathval[p], sg.getNode(q).getDens());
+                    // Verify if 'p' is a new seed (not yet conquered by any tree). 
+                    // If so, assign a new label and update its pathval to its own density. 
+                    // This ensures that the initial seeds for the clustering are determined by the original densities of the subgraph,
+                    // while still allowing the path constraints to be governed by the intersection of the kernels' adjacencies.
+                    if (sg.getNode(p).getPred() == NIL) {
+                        pathval[p] = sg.getNode(p).getDens();
+                        sg.getNode(p).setLabel(l++);
+                        sg.getNode(p).setTruelabel(sg.getNode(p).getLabel()); // keep the original label as truelabel for potential later use
+                    }
+                    sg.getNode(p).setPathval(pathval[p]);
+
+                    // get the base adjacency list from the original subgraph, which represents the most permissive connectivity constraints before applying the kernel intersections
+                    const auto& adjListBase = sg.getNode(p).getAdj();
+                    for (int q : adjListBase) {
+                        if (q < 0 || q >= n) { continue; }
+                        // extract the maximum density value for node q across all kernels, which represents the most permissive path constraint from any kernel's perspective
+                        float dens_q = kernels[0].getNode(q).getDens();
+                        for (size_t ki = 1; ki < kernels.size(); ++ki) {
+                            float tmp= kernels[ki].getNode(q).getDens();
+                            dens_q = std::max(dens_q, tmp);
+                        }
+                        float tmp = std::min(pathval[p], dens_q);
                         if (tmp > pathval[q]) {
                             pathval[q] = tmp;
                             sg.getNode(q).setPred(p);
@@ -410,23 +491,9 @@ namespace opf {
                             Q.push({pathval[q], q});
                         }
                     }
-                    // Incrementa k independentemente de q ter passado na interseção ou não,
-                    // pois k rastreia o limite de busca (kmax) do kernel base.
-                    ++k; 
                 }
+                sg.setNumLabels(l);
             }
-            sg.setNumLabels(l);
-        }
-
-        void clusterWithJointProbabilities(
-            Subgraph<T>& sg,
-            const KernelJointProbabilityAccumulator& accumulator,
-            std::vector<opf::KernelSubGraph<T>>& kernels
-        ) {
-            applyJointProbabilitiesToSubgraph(sg, accumulator);
-            jointClusteringToKmax(sg, kernels);
-        }
-
 
         void intersectKernelAdjacencies(std::vector<opf::KernelSubGraph<T>>& kernels) {
             if (kernels.size() <= 1) {
