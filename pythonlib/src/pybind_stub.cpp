@@ -268,7 +268,7 @@ PYBIND11_MODULE(opfpy, m) {
         .def("bestk_min_cut_per_stride_kernel", &OPFpp<float>::bestkMinCutPerStrideKernel, py::arg("strided"), py::arg("kmin"), py::arg("kmax"))
         .def("update_joint_probabilities_from_kernels", &OPFpp<float>::updateJointProbabilitiesFromKernels, py::arg("kernels"), py::arg("accumulator"), py::arg("epsilon") = 1e-12f)
         .def("apply_joint_probabilities_to_subgraph", &OPFpp<float>::applyJointProbabilitiesToSubgraph, py::arg("subgraph"), py::arg("accumulator"))
-        .def("joint_kernels_clustering", &OPFpp<float>::jointKernelsClustering, py::arg("subgraph"), py::arg("kernels"))
+        .def("joint_kernels_clustering", &OPFpp<float>::jointKernelsClustering, py::arg("subgraph"), py::arg("kernels"), py::arg("cost_offset") = 0.0f)
         .def("intersect_kernel_adjacencies", &opf::OPFpp<float>::intersectKernelAdjacencies, py::arg("kernels"))
         .def("clustering_with_random_labels", &opf::OPFpp<float>::clusteringWithRandomLabels, py::arg("subgraph"), py::arg("num_samples"), py::arg("num_labels"))
     // ========================================================================
