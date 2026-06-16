@@ -278,7 +278,8 @@ namespace opf
         void computeDensityFromAdjacency(KernelSubGraph<T> &ksg, int adjacency_limit)
         {
             const int n = ksg.getNumNodes();
-            const float K = 2.0f * ksg.getDf() / 9.0f;
+            const float d_f = ksg.getDf();
+            const float K = 2.0f * d_f / 9.0f;
             ksg.setK(K);
 
             std::vector<float> value(n);
@@ -289,15 +290,19 @@ namespace opf
             {
                 float sum = 0.0f;
                 int nelems = 1;
-                const auto &adjList = ksg.getNode(i).getAdj();
+                const auto &adjList = ksg.getKernelAdj(i);
                 int k = 0;
                 for (int q : adjList)
                 {
                     if (adjacency_limit > 0 && k >= adjacency_limit)
                         break;
                     float dist = distance::euclDist<T>(*ksg.getNode(i).getFeat(), *ksg.getNode(q).getFeat());
-                    sum += std::exp(-dist / K);
-                    ++nelems;
+                    if (dist <= d_f)
+                    {
+                        sum += std::exp(-dist / K);
+                        ++nelems;
+                    }
+                    else break;
                     ++k;
                 }
                 value[i] = sum / static_cast<float>(nelems);
@@ -339,6 +344,41 @@ namespace opf
             }
         }
 
+        std::vector<float> createKernelArcs2(KernelSubGraph<T>& ksg, int kmax) {
+
+            std::vector<float> maxdists(kmax, 0.0f);  // maxdists[k-1] = max df at k
+            const int n = ksg.getNumNodes();
+            float df = ksg.getDf();
+           
+            for (int i = 0; i < n; ++i) {
+                
+                std::vector<float> d(kmax + 1, std::numeric_limits<float>::max());
+                std::vector<int>   nn(kmax + 1, -1);
+                auto adjList = ksg.getNode(i).getAdj(); // this is the subgraph OLD Aajacency list, which is used to compute the distances and density contributions for the new adjacency list that will be set on sg. The new adjacency list on ksg will be built by taking the first kmax neighbors from adjList, which is assumed to be sorted by distance.    
+                for (auto j : adjList) { 
+                    d[kmax]  = distance::euclDist<T>(*ksg.getNode(i).getFeat(), *ksg.getNode(j).getFeat());
+                    if (d[kmax] <= df ) {
+                        nn[kmax] = j;
+                        int pos = kmax;
+                        while (pos > 0 && d[pos] < d[pos - 1]) {
+                            std::swap(d[pos], d[pos - 1]);
+                            std::swap(nn[pos], nn[pos - 1]);
+                            --pos;
+                        }                            
+                    }
+                }
+                ksg.setNodeSharedAdj(i, std::make_shared<const std::vector<int>>(nn));
+     
+            }
+
+            // maxdists[k-1] should be the max over all 1..k neighbors, not just k-th
+            for (int k = 1; k < kmax; ++k)
+                if (maxdists[k] < maxdists[k - 1])
+                    maxdists[k] = maxdists[k - 1];
+
+            return maxdists;
+        }
+
         std::vector<KernelBestKResult> bestkMinCutPerKernel(
             const std::vector<KernelSubGraph<T>> &kernels,
             int kmin,
@@ -378,6 +418,7 @@ namespace opf
                 destroyKernelArcs(sg_kernel);
                 sg_kernel.setBestK(bestk);
                 sg_kernel.setDf(maxdists[bestk - 1]);
+                // createKernelArcs2(sg_kernel, bestk);
                 computeDensityFromAdjacency(sg_kernel, bestk);
 
                 KernelBestKResult out;

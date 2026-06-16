@@ -43,6 +43,7 @@ namespace opf {
     ///   shallow by default (reads go to the source); writes go to a local copy.
     /// * kernel_feature_sizes and kernel_weights are local (not delegated).
     /// * Node proxies are created lazily and cached.
+
     template<typename T>
     class KernelSubGraph {
     public:
