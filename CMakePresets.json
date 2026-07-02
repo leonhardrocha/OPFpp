@@ -14,12 +14,11 @@
                 "CMAKE_CXX_FLAGS": "-g",
                 "CMAKE_INSTALL_PREFIX": "${sourceDir}/install/gcc",
                 "CMAKE_EXE_LINKER_FLAGS": "-g",
-                "CMAKE_C_COMPILER": "d:/msys64/ucrt64/bin/gcc.exe",
-                "CMAKE_CXX_COMPILER": "d:/msys64/ucrt64/bin/g++.exe",
+                "CMAKE_C_COMPILER": "/usr/bin/gcc",
+                "CMAKE_CXX_COMPILER": "/usr/bin/g++",
                 "Python_ROOT_DIR": "${sourceDir}/pythonlib/.venv",
-                "Python_EXECUTABLE": "${sourceDir}/pythonlib/.venv/Scripts/python.exe",
-                "Python_INCLUDE_DIR": "C:/Users/leonardo_rocha/AppData/Roaming/uv/python/cpython-3.14-windows-x86_64-none/Include",
-                "Python_LIBRARY": "C:/Users/leonardo_rocha/AppData/Roaming/uv/python/cpython-3.14-windows-x86_64-none/libs/python314.lib"
+                "Python_EXECUTABLE": "${sourceDir}/pythonlib/.venv/bin/python",
+                "Python_INCLUDE_DIR": "/home/leonhardrocha/.local/share/uv/python/cpython-3.14.4-linux-x86_64-gnu/include/python3.14"
             }
         },
         {
@@ -60,12 +59,11 @@
             "cacheVariables": {
                 "CMAKE_BUILD_TYPE": "Debug",
                 "CMAKE_EXPORT_COMPILE_COMMANDS": "YES",
-                "CMAKE_C_COMPILER": "d:/msys64/ucrt64/bin/gcc.exe",
-                "CMAKE_CXX_COMPILER": "d:/msys64/ucrt64/bin/g++.exe",
+                "CMAKE_C_COMPILER": "/usr/bin/gcc",
+                "CMAKE_CXX_COMPILER": "/usr/bin/g++",
                 "Python_ROOT_DIR": "${sourceDir}/pythonlib/.venv",
-                "Python_EXECUTABLE": "${sourceDir}/pythonlib/.venv/Scripts/python.exe",
-                "Python_INCLUDE_DIR": "C:/Users/leonardo_rocha/AppData/Roaming/uv/python/cpython-3.14-windows-x86_64-none/Include",
-                "Python_LIBRARY": "C:/Users/leonardo_rocha/AppData/Roaming/uv/python/cpython-3.14-windows-x86_64-none/libs/python314.lib"
+                "Python_EXECUTABLE": "${sourceDir}/pythonlib/.venv/bin/python",
+                "Python_INCLUDE_DIR": "/home/leonhardrocha/.local/share/uv/python/cpython-3.14.4-linux-x86_64-gnu/include/python3.14"
             }
         },
         {

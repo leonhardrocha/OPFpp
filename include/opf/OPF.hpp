@@ -5,6 +5,7 @@
 #include "Distance.hpp"
 #include "ComponentTree.hpp"
 #include <string>
+#include <stdexcept>
 #include <vector>
 #include <queue>
 #include <algorithm>
@@ -17,6 +18,20 @@ namespace opf {
 
     template<typename T>
     class OPF {
+    public:
+        enum class AdjacencyMode {
+            LegacyKnn = 0,
+            Preset = 1,
+        };
+
+        enum class DensityEstimationMode {
+            Gaussian = 0,
+            InverseDistance = 1,
+        };
+
+    protected:
+        AdjacencyMode adjacency_mode_ = AdjacencyMode::LegacyKnn;
+        DensityEstimationMode density_estimation_mode_ = DensityEstimationMode::Gaussian;
     private:
         void mstPrototypes(Subgraph<T>& sg) {
             std::vector<float> pathval(sg.getNumNodes(), std::numeric_limits<float>::max());
@@ -418,14 +433,40 @@ namespace opf {
             return merged;
         }
 
+        void setAdjacencyMode(AdjacencyMode mode) { adjacency_mode_ = mode; }
+        AdjacencyMode getAdjacencyMode() const { return adjacency_mode_; }
+        void setDensityEstimationMode(DensityEstimationMode mode) { density_estimation_mode_ = mode; }
+        DensityEstimationMode getDensityEstimationMode() const { return density_estimation_mode_; }
+
         // ---- Arc management -------------------------------------------------
 
         /// Build a k-NN adjacency graph.  Sets sg.df (max arc weight among all
         /// knn neighbors) and each node's radius to its farthest knn neighbour.
         /// Mirrors opf_CreateArcs from LibOPF.
+        /// TODO: Generalize distance::euclDist<T>
         void createArcs(Subgraph<T>& sg, int knn) {
             const int n = sg.getNumNodes();
             float df = 0.0f;
+
+            if (adjacency_mode_ == AdjacencyMode::Preset) {
+                for (int i = 0; i < n; ++i) {
+                    float radius = 0.0f;
+                    int used = 0;
+                    for (int q : sg.getNode(i).getAdj()) {
+                        if (used >= knn) break;
+                        if (q < 0 || q >= n || q == i) continue;
+                        float dist = distance::euclDist<T>(*sg.getNode(i).getFeat(), *sg.getNode(q).getFeat());
+                        if (dist > df) df = dist;
+                        if (dist > radius) radius = dist;
+                        ++used;
+                    }
+                    sg.getNode(i).setRadius(radius);
+                }
+
+                sg.setDf(df < 1e-5f ? 1.0f : df);
+                sg.setBestK(knn);
+                return;
+            }
 
             for (int i = 0; i < n; ++i) {
                 sg.getNode(i).clearAdj();
@@ -473,43 +514,9 @@ namespace opf {
 
         /// Compute the Gaussian kernel PDF over the kNN graph and store the
         /// normalized density in each node.  Mirrors opf_PDF from LibOPF.
+        /// TODO: Generalize distance::euclDist<T>
         void computePDF(Subgraph<T>& sg) {
-            const int n = sg.getNumNodes();
-            const float K = 2.0f * sg.getDf() / 9.0f;
-            sg.setK(K);
-
-            std::vector<float> value(n);
-            float mindens =  std::numeric_limits<float>::max();
-            float maxdens = -std::numeric_limits<float>::max();
-
-            for (int i = 0; i < n; ++i) {
-                float sum = 0.0f;
-                int   nelems = 1;
-                for (int q : sg.getNode(i).getAdj()) {
-                    float dist = distance::euclDist<T>(*sg.getNode(i).getFeat(), *sg.getNode(q).getFeat());
-                    sum += std::exp(-dist / K);
-                    ++nelems;
-                }
-                value[i] = sum / static_cast<float>(nelems);
-                if (value[i] < mindens) mindens = value[i];
-                if (value[i] > maxdens) maxdens = value[i];
-            }
-
-            sg.setMinDens(mindens);
-            sg.setMaxDens(maxdens);
-
-            if (mindens == maxdens) {
-                for (int i = 0; i < n; ++i) {
-                    sg.getNode(i).setDens(opf_MAXDENS);
-                    sg.getNode(i).setPathval(opf_MAXDENS - 1.0f);
-                }
-            } else {
-                for (int i = 0; i < n; ++i) {
-                    float dens = (opf_MAXDENS - 1.0f) * (value[i] - mindens) / (maxdens - mindens) + 1.0f;
-                    sg.getNode(i).setDens(dens);
-                    sg.getNode(i).setPathval(dens - 1.0f);
-                }
-            }
+            computeDensityFromAdjacency(sg, /*adjacency_limit=*/-1);
         }
 
         // ---- Maxima suppression ----------------------------------------------
@@ -620,17 +627,93 @@ namespace opf {
             computePDF(sg);
         }
 
-    private:
+    protected:
         // ---- Helpers for bestkMinCut ----------------------------------------
+
+        float densityContribution(float dist, float K) const {
+            const float safeK = std::max(K, 1e-6f);
+            if (density_estimation_mode_ == DensityEstimationMode::InverseDistance) {
+                return 1.0f / (1.0f + (dist / safeK));
+            }
+            return std::exp(-dist / safeK);
+        }
+
+        void computeDensityFromAdjacency(Subgraph<T>& sg, int adjacency_limit) {
+            const int n = sg.getNumNodes();
+            const float K = 2.0f * sg.getDf() / 9.0f;
+            sg.setK(K);
+
+            std::vector<float> value(n);
+            float mindens =  std::numeric_limits<float>::max();
+            float maxdens =  std::numeric_limits<float>::lowest();
+
+            for (int i = 0; i < n; ++i) {
+                float sum = 0.0f;
+                int nelems = 1;
+                const auto& adjList = sg.getNode(i).getAdj();
+                int k = 0;
+                for (int q : adjList) {
+                    if (adjacency_limit > 0 && k >= adjacency_limit) break;
+                    float dist = distance::euclDist<T>(*sg.getNode(i).getFeat(), *sg.getNode(q).getFeat());
+                    sum += densityContribution(dist, K);
+                    ++nelems;
+                    ++k;
+                }
+                value[i] = sum / static_cast<float>(nelems);
+                if (value[i] < mindens) mindens = value[i];
+                if (value[i] > maxdens) maxdens = value[i];
+            }
+
+            sg.setMinDens(mindens);
+            sg.setMaxDens(maxdens);
+
+            if (mindens == maxdens) {
+                for (int i = 0; i < n; ++i) {
+                    sg.getNode(i).setDens(opf_MAXDENS);
+                    sg.getNode(i).setPathval(opf_MAXDENS - 1.0f);
+                }
+                return;
+            }
+
+            for (int i = 0; i < n; ++i) {
+                float norm = (value[i] - mindens) / (maxdens - mindens);
+                norm = std::clamp(norm, 0.0f, 1.0f);
+
+                float dens = (opf_MAXDENS - 1.0f) * norm + 1.0f;
+                sg.getNode(i).setDens(dens);
+                sg.getNode(i).setPathval(dens - 1.0f);
+            }
+        }
 
         static constexpr float opf_MAXDENS  = 1000.0f;
         static constexpr float opf_MAXARCW  = 100000.0f;
 
         /// Build the kmax-NN graph and return the max arc distance at each k=1..kmax.
         /// Mirrors opf_CreateArcs2: sg adjacency is set to the full kmax neighbors.
+        /// TODO: Generalize distance::euclDist<T>
         std::vector<float> createArcs2(Subgraph<T>& sg, int kmax) {
             const int n = sg.getNumNodes();
             std::vector<float> maxdists(kmax, 0.0f);  // maxdists[k-1] = max df at k
+
+            if (adjacency_mode_ == AdjacencyMode::Preset) {
+                for (int i = 0; i < n; ++i) {
+                    sg.getNode(i).setNplatadj(0);
+                    int l = 0;
+                    for (int q : sg.getNode(i).getAdj()) {
+                        if (l >= kmax) break;
+                        if (q < 0 || q >= n || q == i) continue;
+                        float dist = distance::euclDist<T>(*sg.getNode(i).getFeat(), *sg.getNode(q).getFeat());
+                        if (dist > maxdists[l]) maxdists[l] = dist;
+                        ++l;
+                    }
+                }
+
+                for (int k = 1; k < kmax; ++k)
+                    if (maxdists[k] < maxdists[k - 1])
+                        maxdists[k] = maxdists[k - 1];
+
+                return maxdists;
+            }
 
             for (int i = 0; i < n; ++i) {
                 sg.getNode(i).clearAdj();
@@ -670,47 +753,7 @@ namespace opf {
         /// PDF computation limited to the first bestk neighbors in the adjacency
         /// list (plateau neighbors excluded).  Mirrors opf_PDFtoKmax.
         void pdfToKmax(Subgraph<T>& sg) {
-            const int   n    = sg.getNumNodes();
-            const int   kmax = sg.getBestK();
-            const float K    = 2.0f * sg.getDf() / 9.0f;
-            sg.setK(K);
-
-            std::vector<float> value(n);
-            float mindens =  std::numeric_limits<float>::max();
-            float maxdens = -std::numeric_limits<float>::max();
-
-            for (int i = 0; i < n; ++i) {
-                float sum   = 0.0f;
-                int   nelems = 1;
-                const auto& adjList = sg.getNode(i).getAdj();
-                int k = 0;
-                for (int q : adjList) {
-                    if (k >= kmax) break;
-                    float dist = distance::euclDist<T>(*sg.getNode(i).getFeat(), *sg.getNode(q).getFeat());
-                    sum += std::exp(-dist / K);
-                    ++nelems;
-                    ++k;
-                }
-                value[i] = sum / static_cast<float>(nelems);
-                if (value[i] < mindens) mindens = value[i];
-                if (value[i] > maxdens) maxdens = value[i];
-            }
-
-            sg.setMinDens(mindens);
-            sg.setMaxDens(maxdens);
-
-            if (mindens == maxdens) {
-                for (int i = 0; i < n; ++i) {
-                    sg.getNode(i).setDens(opf_MAXDENS);
-                    sg.getNode(i).setPathval(opf_MAXDENS - 1.0f);
-                }
-            } else {
-                for (int i = 0; i < n; ++i) {
-                    float dens = (opf_MAXDENS - 1.0f) * (value[i] - mindens) / (maxdens - mindens) + 1.0f;
-                    sg.getNode(i).setDens(dens);
-                    sg.getNode(i).setPathval(dens - 1.0f);
-                }
-            }
+            computeDensityFromAdjacency(sg, sg.getBestK());
         }
 
         /// OPF clustering limited to the first bestk neighbors.

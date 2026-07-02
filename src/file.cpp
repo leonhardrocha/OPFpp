@@ -2,7 +2,14 @@
 #include <opf/common.hpp>
 #include <cstdio>
 #include <vector>
+#include <memory>
+#include <iostream>
 
+// Macro to sanity check read
+#define SAFE_WARNING(res, var_name) \
+    if ((res) == 0) { \
+        std::cout << "Warning: zero bytes read from " << var_name << " in " << __func__ << "!\n"; \
+    }
 namespace opf {
 
 template<typename T>
@@ -11,11 +18,14 @@ void readSubgraph(const std::string& filename, Subgraph<T>& sg) {
     if (!fp) {
         Error("Cannot open file", "readSubgraph");
     }
-
+    size_t read_bytes = 0;
     int n, nlabels, nfeats;
-    fread(&n, sizeof(int), 1, fp);
-    fread(&nlabels, sizeof(int), 1, fp);
-    fread(&nfeats, sizeof(int), 1, fp);
+    read_bytes = fread(&n, sizeof(int), 1, fp);
+    SAFE_WARNING(read_bytes, "n")
+    read_bytes = fread(&nlabels, sizeof(int), 1, fp);
+    SAFE_WARNING(read_bytes, "nlabels");
+    read_bytes = fread(&nfeats, sizeof(int), 1, fp);
+    SAFE_WARNING(read_bytes, "nfeats");
 
     sg.setNumLabels(nlabels);
     sg.setNumFeats(nfeats);
@@ -24,16 +34,20 @@ void readSubgraph(const std::string& filename, Subgraph<T>& sg) {
     for (int i = 0; i < n; ++i) {
         int truelabel, position;
         float pathval;
-        fread(&truelabel, sizeof(int), 1, fp);
-        fread(&position, sizeof(int), 1, fp);
-        fread(&pathval, sizeof(float), 1, fp);
+        read_bytes = fread(&truelabel, sizeof(int), 1, fp);
+        SAFE_WARNING(read_bytes, "truelabel")
+        read_bytes = fread(&position, sizeof(int), 1, fp);
+        SAFE_WARNING(read_bytes, "position")
+        read_bytes = fread(&pathval, sizeof(float), 1, fp);
+        SAFE_WARNING(read_bytes, "pathval")
 
         nodes[i].setTruelabel(truelabel);
         nodes[i].setPosition(position);
         nodes[i].setPathval(pathval);
 
         auto feat = std::make_shared<std::vector<T>>(nfeats);
-        fread(feat->data(), sizeof(T), nfeats, fp);
+        read_bytes = fread(feat->data(), sizeof(T), nfeats, fp);
+        SAFE_WARNING(read_bytes, "feat")
         nodes[i].setFeat(feat);
     }
     sg.setNodes(nodes);

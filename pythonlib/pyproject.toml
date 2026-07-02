@@ -1,3 +1,7 @@
+[build-system]
+requires = ["scikit-build-core>=0.12.0", "pybind11>=2.11.0", "cython>=3.0.0"]
+build-backend = "scikit_build_core.build"
+
 [project]
 name = "opfppy"
 version = "0.6.0"
@@ -8,10 +12,35 @@ dependencies = [
     "plyfile>=1.0",
     "colorcet>=3.0",
 ]
+authors = [
+    { name = "Leonhard Rocha" }
+]
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "Programming Language :: C++",
+    "Topic :: Scientific/Engineering",
+]
 
 [project.urls]
 Repository = "https://github.com/leonhardrocha/OPFpp"
 
-[tool.setuptools.packages.find]
-where = ["."]
-include = ["opfppy*"]
+[tool.scikit-build]
+cmake.args = ["-DCMAKE_BUILD_TYPE=Release", "-DUSE_CONAN=OFF"]
+cmake.source-dir = ".."
+
+[tool.scikit-build.wheel]
+packages = ["opfppy"]
+
+[tool.cibuildwheel]
+# Define as versões do Python alvo para o build
+build = "cp311-manylinux_x86_64 cp312-manylinux_x86_64"
+
+# CORREÇÃO 1: Adicionado --system para garantir que cai no interpretador global do manylinux
+before-build = "python -m pip install --upgrade pip && python -m pip install --system cmake ninja pybind11 cython scikit-build-core"
+
+# Altera o gerador de build do 'build' padrão para o 'pip' com argumentos locais
+build-frontend = { name = "pip", args = ["--no-build-isolation"] }
+
+[tool.cibuildwheel.environment]
+# CORREÇÃO 2: Limpamos as variáveis conflitantes de frontend, deixando apenas o escopo limpo do CMake
+CMAKE_BUILD_TYPE = "Release"

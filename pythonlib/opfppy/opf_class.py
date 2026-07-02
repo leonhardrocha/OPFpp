@@ -22,14 +22,49 @@ Call :meth:`register` to record the subclass for domain lookup.
 
 from __future__ import annotations
 
+import functools
 import opfpy as _opfpy
+
+_RawOPF = _opfpy.OPF
+_RawOPFpp = getattr(_opfpy, "OPFpp", _RawOPF)
+
+
+class _OPFParentProxy:
+    """Proxy that exposes a raw ``opfpy.OPF`` through Python methods/properties."""
+
+    def __init__(self, parent: _opfpy.OPF):
+        object.__setattr__(self, "_parent", parent)
+
+    @property
+    def parent(self) -> _opfpy.OPF:
+        """Return the wrapped raw ``opfpy.OPF`` instance."""
+        return object.__getattribute__(self, "_parent")
+
+    def __getattr__(self, name):
+        parent = object.__getattribute__(self, "_parent")
+        attr = getattr(parent, name)
+        if callable(attr):
+            @functools.wraps(attr)
+            def _wrapped(*args, **kwargs):
+                return attr(*args, **kwargs)
+            return _wrapped
+        return attr
+
+    def __setattr__(self, name, value):
+        if name == "_parent":
+            object.__setattr__(self, name, value)
+            return
+        setattr(object.__getattribute__(self, "_parent"), name, value)
+
+    def __repr__(self) -> str:
+        return OPF.__repr__(object.__getattribute__(self, "_parent"))
 
 
 # ---------------------------------------------------------------------------
 # Python shim class
 # ---------------------------------------------------------------------------
 
-class OPF(_opfpy.OPF):
+class OPF(_RawOPF):
     """Python-level wrapper around ``opfpy.OPF``.
 
     Inherits every pybind11 method from the C++ binding and adds a
@@ -45,15 +80,25 @@ class OPF(_opfpy.OPF):
     # ------------------------------------------------------------------
 
     @classmethod
-    def wrap(cls, opf: _opfpy.OPF) -> "OPF":
-        """Not supported: pybind11 C-extension types block ``__class__`` reassignment.
+    def wrap(cls, opf: _opfpy.OPF) -> "OPF | _OPFParentProxy":
+        """Wrap a raw ``opfpy.OPF`` in a Python proxy shim.
 
-        Create a new :class:`OPF` instance directly: ``clf = OPF()``.
+        Parameters
+        ----------
+        opf : opfpy.OPF
+            Raw C-extension OPF instance.
+
+        Returns
+        -------
+        OPF | _OPFParentProxy
+            Existing shim instance when already wrapped, otherwise a proxy that
+            forwards methods/properties to the parent object.
         """
-        raise NotImplementedError(
-            "Cannot promote opfpy.OPF to opfppy.OPF via __class__ assignment. "
-            "Create an opfppy.OPF() instance directly."
-        )
+        if isinstance(opf, cls):
+            return opf
+        if not isinstance(opf, _opfpy.OPF):
+            raise TypeError(f"Expected opfpy.OPF, got {type(opf)!r}")
+        return _OPFParentProxy(opf)
 
     # ------------------------------------------------------------------
     # Registry — analogous to distance.register()
@@ -73,3 +118,10 @@ class OPF(_opfpy.OPF):
         if not issubclass(subclass, cls):
             raise TypeError(f"{subclass!r} is not a subclass of OPF")
         cls._registry[name] = subclass
+
+
+class OPFpp(_RawOPFpp):
+    """Python-level wrapper around ``opfpy.OPFpp`` kernel-extension class."""
+
+    def __repr__(self) -> str:  # noqa: D105
+        return "OPFpp()"

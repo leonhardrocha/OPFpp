@@ -1,0 +1,1 @@
+. "/home/leonhardrocha/dev/SVR2026/Texture-GS/OPFpp/build_local/conanbuildenv-release-x86_64.sh"

@@ -2,6 +2,7 @@
 #define OPF_NODE_HPP
 
 #include <opf/common.hpp>
+#include <memory>
 
 namespace opf {
     template<typename T>
@@ -44,6 +45,7 @@ namespace opf {
         // Adjacency list manipulation
         void addToAdj(int node_index) { adj.push_back(node_index); }
         void clearAdj() { adj.clear(); }
+        void setAdj(std::vector<int> new_adj) {this->adj = std::move(new_adj); }
 
     private:
         float pathval = 0.0f;

@@ -18,7 +18,7 @@ if _PYTHONLIB_DIR not in sys.path:
 from opfppy.utils import load, split, accuracy, info
 from opfppy.supervised import train_and_classify
 
-DATA_FILE = os.path.join(os.path.dirname(__file__), "..", "data", "boat.dat")
+DATA_FILE = os.path.join(os.path.dirname(__file__), "..", "..", "data", "boat.dat")
 
 
 def main(data_path: str = DATA_FILE) -> None:

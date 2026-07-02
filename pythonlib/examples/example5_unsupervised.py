@@ -16,51 +16,40 @@ if _PYTHONLIB_DIR not in sys.path:
     sys.path.insert(0, _PYTHONLIB_DIR)
 
 from opfppy.utils import load, split, accuracy, info
-import opfpy
+import opfppy
 
 DATA_FILE = os.path.join(os.path.dirname(__file__), "..", "..", "data", "data1.dat")
 
-# Nearest-neighbour k for the knn graph / pdf
-K = 5
-
-
-def _build_knn_and_pdf(sg: opfpy.Subgraph, k: int) -> None:
-    """Set uniform radius so knn_classify can work without full BestKMinCut."""
-    # Compute per-node radius as the k-th nearest-neighbour distance.
-    n = sg.nnodes
-    for i in range(n):
-        fi = sg.get_node(i).feat
-        dists = sorted(
-            opfpy.eucl_dist(fi, sg.get_node(j).feat)
-            for j in range(n) if j != i
-        )
-        sg.get_node(i).radius = dists[min(k - 1, len(dists) - 1)]
 
 
 def main(data_path: str = DATA_FILE) -> None:
     print("Example 5 — Unsupervised OPF Clustering + k-NN Classify")
     print("==========================================================")
 
-    data = load(data_path)
+    # Load dataset (unlabeled for clustering)
+    sg = load(data_path)
     print(f"Dataset: {data_path}")
-    print(f"  {info(data)}")
+    print(f"  {info(sg)}")
 
-    train_sg, test_sg = split(data, 0.8)
-    print(f"  Train: {train_sg.nnodes}  |  Test: {test_sg.nnodes}")
+    # Unsupervised clustering: bestk_min_cut finds optimal k, clusters the data
+    clf = opfppy.OPF()
+    # Typical k range for bestk_min_cut is 2 to 10 (can be tuned)
+    clf.bestk_min_cut(sg, 2, 10)
+    print("  Performed unsupervised clustering with best-k min-cut.")
 
-    # Build adjacency / radius so knn_classify can run
-    _build_knn_and_pdf(train_sg, K)
+    # Propagate cluster labels (assigns a unique label to each cluster/tree)
+    opfppy.propagate_cluster_labels(sg)
+    print("  Propagated cluster labels to all nodes.")
 
-    # Propagate the truelabel of each root to its tree members so the
-    # cluster model can be used as a classifier.
-    opfpy.propagate_cluster_labels(train_sg)
+    # Optionally, print number of clusters found
+    cluster_labels = {sg.get_node(i).label for i in range(sg.nnodes)}
+    print(f"  Number of clusters found: {len(cluster_labels)}")
 
-    # k-NN classify test set
-    clf = opfpy.OPF()
+    # For demonstration, split into train/test and use k-NN classify
+    train_sg, test_sg = split(sg, 0.5)
     clf.knn_classify(train_sg, test_sg)
-
-    acc = clf.accuracy(test_sg)
-    print(f"  Accuracy: {acc:.2%}")
+    acc = accuracy(test_sg)
+    print(f"  k-NN classification accuracy: {acc:.2%}")
 
 
 if __name__ == "__main__":
