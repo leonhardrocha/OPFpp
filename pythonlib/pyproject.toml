@@ -1,6 +1,6 @@
 [build-system]
 requires = ["scikit-build-core>=0.12.0", "pybind11>=2.11.0", "cython>=3.0.0"]
-build-backend = "scikit-build-core.build"
+build-backend = "scikit_build_core.build"
 
 [project]
 name = "opfppy"
@@ -25,11 +25,11 @@ classifiers = [
 Repository = "https://github.com/leonhardrocha/OPFpp"
 
 [tool.scikit-build]
-cmake.args = ["-DCMAKE_BUILD_TYPE=Release"]
+cmake.args = ["-DCMAKE_BUILD_TYPE=Release", "-DUSE_CONAN=OFF"]
 cmake.source-dir = ".."
 
-[tool.scikit-build.wheels]
-packages = ["src/opfppy"]
+[tool.scikit-build.wheel]
+packages = ["opfppy"]
 
 [tool.cibuildwheel]
 # Define as versões do Python alvo para o build

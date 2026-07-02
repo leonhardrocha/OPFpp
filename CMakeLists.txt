@@ -1,17 +1,24 @@
 cmake_minimum_required(VERSION 3.16)
 
+# Option to disable Conan (set to OFF for pip/wheel builds)
+option(USE_CONAN "Use Conan package manager for dependencies" ON)
+
 # 1. Defina onde o toolchain REALMENTE deve estar (dentro da pasta de build atual)
 set(CONAN_TOOLCHAIN_PATH "${CMAKE_BINARY_DIR}/conan_toolchain.cmake")
 
-# 2. Se não existir, roda a instalação
-if(NOT EXISTS "${CONAN_TOOLCHAIN_PATH}")
-    message(STATUS "Toolchain do Conan não encontrado em ${CONAN_TOOLCHAIN_PATH}. Gerando...")
-    include(cmake/FindOrInstallMSYS2.cmake)
-    include(cmake/FindOrInstallConan.cmake)
-endif()
+if(USE_CONAN)
+    # 2. Se não existir, roda a instalação
+    if(NOT EXISTS "${CONAN_TOOLCHAIN_PATH}")
+        message(STATUS "Toolchain do Conan não encontrado em ${CONAN_TOOLCHAIN_PATH}. Gerando...")
+        include(cmake/FindOrInstallMSYS2.cmake)
+        include(cmake/FindOrInstallConan.cmake)
+    endif()
 
-# 3. Força o CMake a usar o arquivo que acabou de ser gerado
-set(CMAKE_TOOLCHAIN_FILE "${CONAN_TOOLCHAIN_PATH}" CACHE PATH "" FORCE)
+    # 3. Força o CMake a usar o arquivo que acabou de ser gerado
+    set(CMAKE_TOOLCHAIN_FILE "${CONAN_TOOLCHAIN_PATH}" CACHE PATH "" FORCE)
+else()
+    message(STATUS "Conan desabilitado (USE_CONAN=OFF). Usando dependencias do ambiente.")
+endif()
 
 project(LibOPF_CPP CXX)
 
@@ -68,6 +75,12 @@ add_library(opfpy MODULE
     src/file.cpp
     src/Distance.cpp
 )
+
+# ---------------------------------------------------------------------------
+# ECS module: header-only interface library (include/opf/ecs/*.hpp)
+# ---------------------------------------------------------------------------
+add_library(opf_ecs INTERFACE)
+target_include_directories(opf_ecs INTERFACE "${CMAKE_SOURCE_DIR}/include")
 
 target_include_directories(opfpy PRIVATE
     "${OPFPY_INCLUDE_DIR}"
