@@ -4,9 +4,8 @@
         "conan": {}
     },
     "include": [
-        "\"/home/leonhardrocha/dev/SVR2026/Texture-GS/OPFpp/build/linux\"/CMakePresets.json",
-        "build/CMakePresets.json",
-        "build/gcc/CMakePresets.json",
-        "build_local/CMakePresets.json"
+        "build_local/CMakePresets.json",
+        "build/linux/CMakePresets.json",
+        "build/CMakePresets.json"
     ]
 }
