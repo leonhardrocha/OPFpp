@@ -8,9 +8,6 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), 'bin'))
 # Add MSYS2/UCRT64 runtime DLL directories on Windows
 from windows_runtime_helper import add_windows_runtime_dirs
 add_windows_runtime_dirs()
-# Add MSYS2/UCRT64 runtime DLL directories on Windows
-from windows_runtime_helper import add_windows_runtime_dirs
-add_windows_runtime_dirs()
 
 from opfpy import Node, Subgraph
 

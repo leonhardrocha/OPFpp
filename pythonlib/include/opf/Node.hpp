@@ -1,4 +1,4 @@
 // Forwarding header — pythonlib/include/opf/Node.hpp
-// Delegates to the canonical project header in include_cpp/opf/
+// Delegates to the canonical project header in include/opf/
 #pragma once
-#include "../../../include_cpp/opf/Node.hpp"
+#include "../../../include/opf/Node.hpp"

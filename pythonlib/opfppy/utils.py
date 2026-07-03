@@ -10,6 +10,7 @@ import struct
 import opfpy
 from opfpy import Subgraph
 from opfppy.distance import DistanceMetric, DistanceSpec, resolve as _resolve_distance
+from opfppy.ply_adapter import subgraph_from_ply_file as _from_ply_file
 
 
 # ---------------------------------------------------------------------------
@@ -140,6 +141,22 @@ def info(sg: Subgraph) -> dict:
     dict  Keys: ``nnodes``, ``nlabels``, ``nfeats``.
     """
     return opfpy.subgraph_info(sg)
+
+
+def load_ply(path: str, feature_profile: str = "full") -> tuple[Subgraph, dict]:
+    """Load a Gaussian-splat PLY into an OPF subgraph plus metadata.
+
+    Parameters
+    ----------
+    path : str
+    feature_profile : str
+        ``'full'`` or ``'compact'``.
+
+    Returns
+    -------
+    (Subgraph, dict)
+    """
+    return _from_ply_file(path, feature_profile=feature_profile)
 
 
 # ---------------------------------------------------------------------------

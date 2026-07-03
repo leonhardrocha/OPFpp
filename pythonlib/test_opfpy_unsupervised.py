@@ -33,7 +33,7 @@ def _make_subgraph(samples, nfeats=2, nlabels=0):
 
 class TestClustering(unittest.TestCase):
     def _make_clusterable(self):
-        """Two tight clusters with dens + full adjacency (as opf_cluster does)."""
+        """Two tight clusters prepared by native kNN arc+PDF routines."""
         samples = [
             ([0.0, 0.0], 0),
             ([0.1, 0.1], 0),
@@ -41,23 +41,9 @@ class TestClustering(unittest.TestCase):
             ([10.1, 9.9], 0),
         ]
         sg = _make_subgraph(samples, nfeats=2, nlabels=0)
-        # Assign density inversely proportional to inter-node distance
-        # (closer nodes = higher density), and full adjacency
-        import math
-        n = sg.nnodes
-        for i in range(n):
-            fi = sg.get_node(i).feat
-            min_d = float('inf')
-            for j in range(n):
-                if i != j:
-                    fj = sg.get_node(j).feat
-                    d = math.sqrt(sum((a - b) ** 2 for a, b in zip(fi, fj)))
-                    min_d = min(min_d, d)
-            sg.get_node(i).dens = 1.0 / (1.0 + min_d)
-            sg.get_node(i).pathval = sg.get_node(i).dens
-            for j in range(n):
-                if i != j:
-                    sg.get_node(i).add_to_adj(j)
+        clf = opfpy.OPF()
+        clf.create_arcs(sg, 2)
+        clf.compute_pdf(sg)
         return sg
 
     def test_cluster_assigns_labels(self):
@@ -158,6 +144,35 @@ class TestSemiSupervised(unittest.TestCase):
 
         self.assertIsInstance(merged, opfpy.Subgraph)
         self.assertGreater(merged.nnodes, 0)
+
+
+class TestExample5Workflow(unittest.TestCase):
+    def test_example5_unsupervised_workflow(self):
+        """Replicates examples/example5_unsupervised.py workflow."""
+        data_path = os.path.join(os.path.dirname(__file__), "..", "data", "data1.dat")
+
+        # 1) Load dataset
+        sg = opfpy.Subgraph.from_original_file(data_path)
+
+        # 2) Unsupervised best-k min-cut setup
+        clf = opfpy.OPF()
+        clf.bestk_min_cut(sg, 2, 10)
+
+        # 3) Propagate cluster labels
+        opfpy.propagate_cluster_labels(sg)
+
+        # 4) Ensure clustering produced labels
+        labels = {sg.get_node(i).label for i in range(sg.nnodes)}
+        self.assertGreater(len(labels), 0)
+
+        # 5) Split and run k-NN classify
+        train_sg, test_sg = opfpy.split_subgraph(sg, 0.5)
+        clf.knn_classify(train_sg, test_sg)
+
+        # 6) Accuracy is a valid probability in [0, 1]
+        acc = clf.accuracy(test_sg)
+        self.assertGreaterEqual(acc, 0.0)
+        self.assertLessEqual(acc, 1.0)
 
 
 if __name__ == "__main__":

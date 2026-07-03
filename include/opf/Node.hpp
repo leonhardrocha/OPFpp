@@ -2,6 +2,7 @@
 #define OPF_NODE_HPP
 
 #include <opf/common.hpp>
+#include <memory>
 
 namespace opf {
     template<typename T>

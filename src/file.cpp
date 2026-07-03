@@ -2,6 +2,7 @@
 #include <opf/common.hpp>
 #include <cstdio>
 #include <vector>
+#include <memory>
 
 namespace opf {
 

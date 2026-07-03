@@ -16,51 +16,55 @@ if _PYTHONLIB_DIR not in sys.path:
     sys.path.insert(0, _PYTHONLIB_DIR)
 
 from opfppy.utils import load, split, accuracy, info
-import opfpy
+import opfppy
+from opfppy.unsupervised import bestk_cluster_and_propagate
 
 DATA_FILE = os.path.join(os.path.dirname(__file__), "..", "..", "data", "data1.dat")
 
-# Nearest-neighbour k for the knn graph / pdf
-K = 5
 
+def _run_workflow(data_path: str, weighted_kernel: bool) -> float:
+    mode = "weighted" if weighted_kernel else "original"
 
-def _build_knn_and_pdf(sg: opfpy.Subgraph, k: int) -> None:
-    """Set uniform radius so knn_classify can work without full BestKMinCut."""
-    # Compute per-node radius as the k-th nearest-neighbour distance.
-    n = sg.nnodes
-    for i in range(n):
-        fi = sg.get_node(i).feat
-        dists = sorted(
-            opfpy.eucl_dist(fi, sg.get_node(j).feat)
-            for j in range(n) if j != i
-        )
-        sg.get_node(i).radius = dists[min(k - 1, len(dists) - 1)]
+    # Load dataset (unlabeled for clustering)
+    sg = load(data_path)
+    print(f"\nMode: {mode}")
+    print(f"  Dataset: {data_path}")
+    print(f"  {info(sg)}")
+
+    bestk_cluster_and_propagate(
+        sg,
+        kmin=2,
+        kmax=10,
+        weighted_kernel=weighted_kernel,
+    )
+    print("  Performed unsupervised clustering with best-k min-cut.")
+    print("  Propagated cluster labels to all nodes.")
+
+    cluster_labels = {sg.get_node(i).label for i in range(sg.nnodes)}
+    print(f"  Number of clusters found: {len(cluster_labels)}")
+
+    train_sg, test_sg = split(sg, 0.5)
+    clf = opfppy.OPF()
+    clf.knn_classify(train_sg, test_sg)
+    acc = accuracy(test_sg)
+    print(f"  k-NN classification accuracy: {acc:.2%}")
+    return acc
+
 
 
 def main(data_path: str = DATA_FILE) -> None:
     print("Example 5 — Unsupervised OPF Clustering + k-NN Classify")
     print("==========================================================")
 
-    data = load(data_path)
-    print(f"Dataset: {data_path}")
-    print(f"  {info(data)}")
+    original_acc = _run_workflow(data_path, weighted_kernel=False)
+    weighted_acc = _run_workflow(data_path, weighted_kernel=True)
+    delta = weighted_acc - original_acc
 
-    train_sg, test_sg = split(data, 0.8)
-    print(f"  Train: {train_sg.nnodes}  |  Test: {test_sg.nnodes}")
-
-    # Build adjacency / radius so knn_classify can run
-    _build_knn_and_pdf(train_sg, K)
-
-    # Propagate the truelabel of each root to its tree members so the
-    # cluster model can be used as a classifier.
-    opfpy.propagate_cluster_labels(train_sg)
-
-    # k-NN classify test set
-    clf = opfpy.OPF()
-    clf.knn_classify(train_sg, test_sg)
-
-    acc = clf.accuracy(test_sg)
-    print(f"  Accuracy: {acc:.2%}")
+    print("\nComparison")
+    print("----------")
+    print(f"  Original accuracy: {original_acc:.2%}")
+    print(f"  Weighted accuracy: {weighted_acc:.2%}")
+    print(f"  Delta (weighted - original): {delta:+.2%}")
 
 
 if __name__ == "__main__":

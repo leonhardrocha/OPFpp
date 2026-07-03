@@ -22,9 +22,42 @@ pred, position, status, relevant, nplatadj, feat, adj) are inherited.
 
 from __future__ import annotations
 
+import functools
 from typing import Sequence
 
 import opfpy as _opfpy
+
+
+class _NodeParentProxy:
+    """Proxy that exposes a raw ``opfpy.Node`` through Python methods/properties."""
+
+    def __init__(self, parent: _opfpy.Node):
+        object.__setattr__(self, "_parent", parent)
+
+    @property
+    def parent(self) -> _opfpy.Node:
+        """Return the wrapped raw ``opfpy.Node`` instance."""
+        return object.__getattribute__(self, "_parent")
+
+    def __getattr__(self, name):
+        parent = object.__getattribute__(self, "_parent")
+        attr = getattr(parent, name)
+        if callable(attr):
+            @functools.wraps(attr)
+            def _wrapped(*args, **kwargs):
+                return attr(*args, **kwargs)
+            return _wrapped
+        return attr
+
+    def __setattr__(self, name, value):
+        if name == "_parent":
+            object.__setattr__(self, name, value)
+            return
+        setattr(object.__getattribute__(self, "_parent"), name, value)
+
+    def __repr__(self) -> str:
+        # Reuse shim repr against the wrapped parent object.
+        return Node.__repr__(object.__getattribute__(self, "_parent"))
 
 
 # ---------------------------------------------------------------------------
@@ -78,19 +111,25 @@ class Node(_opfpy.Node):
     # ------------------------------------------------------------------
 
     @classmethod
-    def wrap(cls, node: _opfpy.Node) -> "Node":
-        """Not supported: pybind11 C-extension types block ``__class__`` reassignment.
+    def wrap(cls, node: _opfpy.Node) -> "Node | _NodeParentProxy":
+        """Wrap a raw ``opfpy.Node`` in a Python proxy shim.
 
-        Create a new :class:`Node` and copy properties manually instead::
+        Parameters
+        ----------
+        node : opfpy.Node
+            Raw C-extension node instance.
 
-            n = Node()
-            n.feat = raw_node.feat
-            # ... copy other properties
+        Returns
+        -------
+        Node | _NodeParentProxy
+            Existing shim instance when already wrapped, otherwise a proxy that
+            forwards methods/properties to the parent object.
         """
-        raise NotImplementedError(
-            "Cannot promote opfpy.Node to opfppy.Node via __class__ assignment. "
-            "Create an opfppy.Node() and copy the required properties."
-        )
+        if isinstance(node, cls):
+            return node
+        if not isinstance(node, _opfpy.Node):
+            raise TypeError(f"Expected opfpy.Node, got {type(node)!r}")
+        return _NodeParentProxy(node)
 
     # ------------------------------------------------------------------
     # Registry — analogous to distance.register()

@@ -12,3 +12,6 @@ cdef class Subgraph:
     cdef object _sg  # opfpy.Subgraph instance
     @staticmethod
     cdef Subgraph _from_opfpy(object sg)
+
+cdef class OPF:
+    cdef object _opf  # opfpy.OPF instance

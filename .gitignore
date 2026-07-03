@@ -76,6 +76,10 @@ Thumbs.db
 __pycache__/
 *.py[cod]
 
+# Python packaging outputs
+dist/
+*.egg-info/
+
 
 # CMake
 # CMake

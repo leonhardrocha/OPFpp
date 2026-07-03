@@ -71,7 +71,7 @@ add_library(opfpy MODULE
 
 target_include_directories(opfpy PRIVATE
     "${OPFPY_INCLUDE_DIR}"
-    "${CMAKE_SOURCE_DIR}/include_cpp"
+    "${CMAKE_SOURCE_DIR}/include"
 )
 
 target_link_libraries(opfpy PRIVATE

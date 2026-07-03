@@ -32,7 +32,7 @@ This C++20 version modernizes the original C codebase with:
 | `include/` | Legacy C headers (kept for reference) |
 | `LibOPF/` | Git submodule — the upstream C reference implementation ([jppbsi/LibOPF](https://github.com/jppbsi/LibOPF)) |
 | `pythonlib/` | Python bindings (`opfpy` pybind11 extension, Cython wrapper, tests) |
-| `tests_cpp/` | C++ integration tests |
+| `tests/` | C++ integration tests |
 | `data/` | Sample datasets in OPF binary format |
 
 ### C++ Version License

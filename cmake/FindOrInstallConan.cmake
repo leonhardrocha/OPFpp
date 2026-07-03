@@ -15,6 +15,34 @@ if(NOT EXISTS "${CONAN_TOOLCHAIN_PATH}")
         message(STATUS "Using system Python for Conan: ${_conan_python}")
     endif()
 
+    # Prefer the conan CLI script if available (Conan v2 often lacks python -m entrypoint).
+    find_program(CONAN_EXECUTABLE NAMES conan HINTS
+        "$ENV{VIRTUAL_ENV}/bin"
+        "$ENV{VIRTUAL_ENV}/Scripts"
+        NO_DEFAULT_PATH
+    )
+    if(NOT CONAN_EXECUTABLE)
+        find_program(CONAN_EXECUTABLE NAMES conan)
+    endif()
+
+    if(CONAN_EXECUTABLE)
+        set(_conan_cmd "${CONAN_EXECUTABLE}")
+        set(_conan_args profile detect --force)
+    else()
+        set(_conan_cmd "${_conan_python}")
+        set(_conan_args -m conan profile detect --force)
+    endif()
+
+    # Ensure Conan has a default profile before install.
+    execute_process(
+        COMMAND ${_conan_cmd} ${_conan_args}
+        WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}"
+        RESULT_VARIABLE _conan_profile_result
+    )
+    if(NOT _conan_profile_result EQUAL 0)
+        message(WARNING "Conan profile detect failed; continuing and letting Conan install report details.")
+    endif()
+
     # Get Python include path
     execute_process(
         COMMAND "${_conan_python}" -c "import sysconfig; print(sysconfig.get_path('include'))"
@@ -24,18 +52,33 @@ if(NOT EXISTS "${CONAN_TOOLCHAIN_PATH}")
     set(ENV{PYTHON_INCLUDE_DIR} "${PYTHON_INCLUDE_DIR}")
     message(STATUS "PYTHON_INCLUDE_DIR set to: $ENV{PYTHON_INCLUDE_DIR}")
 
-    execute_process(
-        COMMAND ${CMAKE_COMMAND} -E env
-            "PYTHON_INCLUDE_DIR=${PYTHON_INCLUDE_DIR}"
-            "${_conan_python}" -m conan install "${CMAKE_SOURCE_DIR}"
-                -pr:b=default
-                -pr:h=default
-                -s build_type=Debug
-                --output-folder="${CMAKE_BINARY_DIR}"
-                --build=missing
-        WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}"
-        RESULT_VARIABLE _conan_result
-    )
+    if(CONAN_EXECUTABLE)
+        execute_process(
+            COMMAND ${CMAKE_COMMAND} -E env
+                "PYTHON_INCLUDE_DIR=${PYTHON_INCLUDE_DIR}"
+                "${CONAN_EXECUTABLE}" install ${CMAKE_SOURCE_DIR}
+                    -pr:b=default
+                    -pr:h=default
+                    -s build_type=Debug
+                    --output-folder=${CMAKE_BINARY_DIR}
+                    --build=missing
+            WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}"
+            RESULT_VARIABLE _conan_result
+        )
+    else()
+        execute_process(
+            COMMAND ${CMAKE_COMMAND} -E env
+                "PYTHON_INCLUDE_DIR=${PYTHON_INCLUDE_DIR}"
+                "${_conan_python}" -m conan install ${CMAKE_SOURCE_DIR}
+                    -pr:b=default
+                    -pr:h=default
+                    -s build_type=Debug
+                    --output-folder=${CMAKE_BINARY_DIR}
+                    --build=missing
+            WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}"
+            RESULT_VARIABLE _conan_result
+        )
+    endif()
     if(NOT _conan_result EQUAL 0)
         message(FATAL_ERROR "Conan install failed. Please check your Conan/.venv setup.")
     endif()

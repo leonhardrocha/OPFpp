@@ -8,6 +8,7 @@
 #include <iostream>
 #include <stdexcept>
 #include <numeric>
+#include <memory>
 
 namespace opf {
     template<typename T>
@@ -28,9 +29,12 @@ namespace opf {
         float getMinDens() const { return mindens; }
         float getMaxDens() const { return maxdens; }
         float getK() const { return K; }
+        const std::vector<int>& getKernelFeatureSizes() const { return kernel_feature_sizes; }
+        const std::vector<float>& getKernelWeights() const { return kernel_weights; }
         const std::vector<Node<T>>& getNodes() const { return nodes; }
-        Node<T>& getNode(int index) { return nodes[index]; }
+        std::vector<Node<T>>& getNodes() { return nodes; }
         const Node<T>& getNode(int index) const { return nodes[index]; }
+        Node<T>& getNode(int index) { return nodes[index]; }
         const std::vector<int>& getOrderedListOfNodes() const { return ordered_list_of_nodes; }
 
         // Setters
@@ -41,6 +45,8 @@ namespace opf {
         void setMinDens(float val) { mindens = val; }
         void setMaxDens(float val) { maxdens = val; }
         void setK(float val) { K = val; }
+        void setKernelFeatureSizes(const std::vector<int>& val) { kernel_feature_sizes = val; }
+        void setKernelWeights(const std::vector<float>& val) { kernel_weights = val; }
         void setNodes(const std::vector<Node<T>>& new_nodes) { nodes = new_nodes; }
 
 
@@ -179,6 +185,8 @@ namespace opf {
         float mindens = 0.0f;
         float maxdens = 0.0f;
         float K = 0.0f;
+        std::vector<int> kernel_feature_sizes;
+        std::vector<float> kernel_weights;
         std::vector<int> ordered_list_of_nodes;
     };
 
