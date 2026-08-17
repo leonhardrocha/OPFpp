@@ -22,47 +22,47 @@ set(OPFPY_SRC_DIR     "${CMAKE_SOURCE_DIR}/pythonlib/src")
 set(OPFPY_INCLUDE_DIR "${CMAKE_SOURCE_DIR}/pythonlib/include")
 set(OPFPY_BIN_DIR     "${CMAKE_SOURCE_DIR}/pythonlib/bin")
 set(OPFPY_LIB_DIR     "${CMAKE_SOURCE_DIR}/pythonlib/lib")
-foreach(_d ${OPFPY_SRC_DIR} ${OPFPY_INCLUDE_DIR}
-           ${OPFPY_BIN_DIR} ${OPFPY_LIB_DIR})
+foreach(_d ${OPFPY_SRC_DIR} ${OPFPY_INCLUDE_DIR} ${OPFPY_BIN_DIR} ${OPFPY_LIB_DIR})
     file(MAKE_DIRECTORY "${_d}")
 endforeach()
 
-set(Python_FIND_STRATEGY LOCATION)
-set(Python_FIND_VIRTUALENV FIRST)
+# ---------------------------------------------------------------------------
+# Configuração Isolada do Python & Pybind11 (.venv do Windows)
+# ---------------------------------------------------------------------------
+# CORREÇÃO: O seu .venv real está localizado em pythonlib/.venv
 if(DEFINED ENV{VIRTUAL_ENV})
-    set(Python_ROOT_DIR "$ENV{VIRTUAL_ENV}")
+    set(MY_VENV_PATH "$ENV{VIRTUAL_ENV}")
+else()
+    # Fallback exato para a estrutura do seu projeto
+    set(MY_VENV_PATH "${CMAKE_SOURCE_DIR}/pythonlib/.venv")
 endif()
 
-set(PYBIND11_FINDPYTHON ON)
+# Força o CMake a olhar APENAS para dentro da pasta correta do seu .venv
+set(Python_ROOT_DIR "${MY_VENV_PATH}")
+set(Python_FIND_STRATEGY LOCATION)
+set(Python_FIND_VIRTUALENV ONLY) # IMPEDE terminantemente buscar o Python do MSYS2
+set(Python_FIND_REGISTRY NEVER)   # Ignora o registro global do Windows
+
+# Salva caminhos originais para restaurar depois
+set(OLD_CMAKE_PROGRAM_PATH ${CMAKE_PROGRAM_PATH})
+set(CMAKE_PROGRAM_PATH "${MY_VENV_PATH}/Scripts" "${MY_VENV_PATH}/bin")
+
+# Encontra o interpretador do seu .venv do Windows (Python 3.14.3)
 find_package(Python REQUIRED COMPONENTS Interpreter Development)
-# Tenta encontrar o utilitário config no ambiente UCRT64
-find_program(PYBIND11_CONFIG NAMES pybind11-config PATHS "D:/msys64/ucrt64/bin" NO_DEFAULT_PATH)
+message(STATUS "[PROTETOR] Python REAL do .VENV encontrado: ${Python_EXECUTABLE}")
 
-if(PYBIND11_CONFIG)
-    # Executa o utilitário para obter o diretório do CMake
-    execute_process(
-        COMMAND ${PYBIND11_CONFIG} --cmakedir
-        OUTPUT_VARIABLE PYBIND11_DIR
-        OUTPUT_STRIP_TRAILING_WHITESPACE
-    )
-    
-    # Executa para obter o sufixo da extensão (ex: .cp314-mingw_x86_64.pyd)
-    execute_process(
-        COMMAND ${PYBIND11_CONFIG} --extension-suffix
-        OUTPUT_VARIABLE PY_EXT_SUFFIX
-        OUTPUT_STRIP_TRAILING_WHITESPACE
-    )
-
-    message(STATUS "Pybind11 Config encontrado: ${PYBIND11_DIR}")
-    
-    # Define o caminho para o find_package encontrar a versão do UCRT64
-    set(pybind11_DIR "${PYBIND11_DIR}")
-endif()
-
+# Localiza o pybind11 instalado via pip/uv no site-packages do Windows
+set(pybind11_DIR "${MY_VENV_PATH}/Lib/site-packages/pybind11/share/cmake/pybind11")
+set(PYBIND11_FINDPYTHON ON)
 find_package(pybind11 REQUIRED)
+message(STATUS "[PROTETOR] Pybind11 do .VENV carregado de: ${pybind11_DIR}")
 
+# Restaura os caminhos padrões do CMake para os passos seguintes do compilador
+set(CMAKE_PROGRAM_PATH ${OLD_CMAKE_PROGRAM_PATH})
 
-
+# ---------------------------------------------------------------------------
+# Target Principal: opfpy
+# ---------------------------------------------------------------------------
 add_library(opfpy MODULE
     ${OPFPY_SRC_DIR}/pybind_stub.cpp
     src/file.cpp
@@ -89,9 +89,10 @@ if(WIN32)
     set_target_properties(opfpy PROPERTIES SUFFIX ".pyd")
 endif()
 
+# Fallbacks de Include para segurança
 set(OPF_PYBIND11_INCLUDE_DIRS "${pybind11_INCLUDE_DIRS}")
 if(NOT OPF_PYBIND11_INCLUDE_DIRS)
-    set(OPF_PYBIND11_INCLUDE_DIRS "${pybind11_INCLUDE_DIR}")
+    set(OPF_PYBIND11_INCLUDE_DIRS "${pybind11_include_dir}")
 endif()
 if(NOT OPF_PYBIND11_INCLUDE_DIRS)
     set(OPF_PYBIND11_INCLUDE_DIRS "${Python_INCLUDE_DIRS}")
@@ -109,26 +110,21 @@ add_custom_command(TARGET opfpy POST_BUILD
 # ---------------------------------------------------------------------------
 # Cython wrapper: opfpy_cython
 # ---------------------------------------------------------------------------
-# Step 1: transpile .pyx -> .cpp using cython --cplus
+# Passo 1: Transpilar .pyx -> .cpp usando o cython.exe do .venv
 set(CYTHON_PYX "${OPFPY_SRC_DIR}/opfpy_cython.pyx")
 set(CYTHON_CPP "${CMAKE_BINARY_DIR}/opfpy_cython.cpp")
 
-find_program(CYTHON_EXECUTABLE NAMES cython3 cython HINTS
-    "${Python_EXECUTABLE}/../.."
-    "$ENV{VIRTUAL_ENV}/Scripts"
-    "$ENV{VIRTUAL_ENV}/bin"
-    NO_DEFAULT_PATH
+# No Windows, executáveis instalados via pip/uv ficam estritamente em .venv/Scripts
+find_program(CYTHON_EXECUTABLE 
+    NAMES cython.exe cython3 cython
+    HINTS "${MY_VENV_PATH}/Scripts"
+    NO_DEFAULT_PATH # Bloqueia o MSYS2 de injetar o cython deles
 )
+
 if(NOT CYTHON_EXECUTABLE)
-    # Fallback: derive from Python interpreter path
-    get_filename_component(_py_bin "${Python_EXECUTABLE}" DIRECTORY)
-    find_program(CYTHON_EXECUTABLE NAMES cython3 cython
-        HINTS "${_py_bin}" NO_DEFAULT_PATH)
+    message(FATAL_ERROR "Cython não encontrado no .venv (${MY_VENV_PATH}). Instale com: uv pip install cython")
 endif()
-if(NOT CYTHON_EXECUTABLE)
-    message(FATAL_ERROR "Cython executable not found. Install it with: uv pip install cython")
-endif()
-message(STATUS "Cython found: ${CYTHON_EXECUTABLE}")
+message(STATUS "[PROTETOR] Cython do .VENV encontrado com sucesso: ${CYTHON_EXECUTABLE}")
 
 add_custom_command(
     OUTPUT  "${CYTHON_CPP}"
@@ -139,7 +135,7 @@ add_custom_command(
     COMMENT "Transpiling opfpy_cython.pyx -> opfpy_cython.cpp"
 )
 
-# Step 2: compile the generated C++ into a Python extension
+# Passo 2: Compilar o C++ gerado em uma extensão Python (.pyd)
 add_library(opfpy_cython MODULE "${CYTHON_CPP}")
 
 target_include_directories(opfpy_cython PRIVATE
@@ -162,5 +158,5 @@ if(WIN32)
     set_target_properties(opfpy_cython PROPERTIES SUFFIX ".pyd")
 endif()
 
-# opfpy_cython depends on opfpy being built first (runtime import)
+# Garante que opfpy seja construído primeiro devido à dependência em tempo de execução
 add_dependencies(opfpy_cython opfpy)

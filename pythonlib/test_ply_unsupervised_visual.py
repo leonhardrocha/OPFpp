@@ -267,7 +267,7 @@ def _sanity_check_random_splats(
 
 
 class TestPlyUnsupervisedVisual(unittest.TestCase):
-    def test_cluster_and_colorize_full_and_compact(self):
+    def test_cluster_and_colorize_full_and_compact(self, count: int | None = None, sample_size: int = 300) -> None:
         if not os.path.isfile(_SAMPLE_PLY):
             self.skipTest(f"Sample PLY not found: {_SAMPLE_PLY}")
 
@@ -277,7 +277,7 @@ class TestPlyUnsupervisedVisual(unittest.TestCase):
             source = SplatSubGraph.from_ply_file(_SAMPLE_PLY, feature_profile=profile)
 
             # Train clustering model on a subset to keep test runtime bounded.
-            train = _copy_nodes(source, count=300)
+            train = _copy_nodes(source, count=count)
             clf = opfpy.OPF()
             # Native LibOPF pipeline (C -> C++ port -> pybind):
             #   opf_BestkMinCut -> createArcs + PDF, then opf_OPFClustering.
@@ -285,7 +285,7 @@ class TestPlyUnsupervisedVisual(unittest.TestCase):
             clf.cluster(train)
 
             # Random sample sanity checks for splat properties + native OPF fields.
-            _sanity_check_random_splats(source, train, sample_size=300, seed=1337)
+            _sanity_check_random_splats(source, train, sample_size=sample_size, seed=42)
 
             for i in range(train.nnodes):
                 node = train.get_node(i)

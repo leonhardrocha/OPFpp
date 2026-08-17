@@ -9,6 +9,14 @@
                 "kind": "build",
                 "isDefault": true
             }
+        },
+        {
+            "type": "cmake",
+            "label": "CMake: configure",
+            "command": "configure",
+            "preset": "conan-debug",
+            "problemMatcher": [],
+            "detail": "CMake template configure task"
         }
     ]
 }
