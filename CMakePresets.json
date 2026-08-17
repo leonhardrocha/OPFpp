@@ -51,16 +51,6 @@
             }
         },
         {
-            "name": "conan-debug",
-            "displayName": "Debug (with Conan dependencies)",
-            "description": "Configure with Conan dependencies and Debug build.",
-            "generator": "Ninja",
-            "binaryDir": "${sourceDir}/build/debug",
-            "cacheVariables": {
-                "CMAKE_BUILD_TYPE": "Debug"
-            }
-        },
-        {
             "name": "gcc-conan",
             "displayName": "GCC (with Conan dependencies)",
             "description": "Herda do Conan e adiciona correções de Python",

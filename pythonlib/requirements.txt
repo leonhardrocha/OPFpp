@@ -1,0 +1,10 @@
+# Python dependencies for recreating pythonlib/.venv
+# Install with: python -m pip install -r requirements.txt
+
+conan
+cython
+pybind11
+build
+wheel
+plyfile
+colorcet

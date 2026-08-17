@@ -6,17 +6,9 @@ import sys
 # Ensure the built extension is on the path when run from pythonlib/
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), 'bin'))
 
-# On Windows, the .pyd is built with MSYS2/UCRT64 GCC and requires runtime DLLs.
-# Runtime folders are configured through VS Code settings using:
-# UCRT64_RUNTIME_FOLDER and UCRT64_RUNTIME_LIB_FOLDER.
-if sys.platform == "win32":
-    _runtime_dirs = [
-        os.environ.get("UCRT64_RUNTIME_FOLDER", ""),
-        os.environ.get("UCRT64_RUNTIME_LIB_FOLDER", ""),
-    ]
-    for _runtime_dir in _runtime_dirs:
-        if _runtime_dir and os.path.isdir(_runtime_dir):
-            os.add_dll_directory(_runtime_dir)
+# Add MSYS2/UCRT64 runtime DLL directories on Windows
+from windows_runtime_helper import add_windows_runtime_dirs
+add_windows_runtime_dirs()
 
 import opfpy_cython as cy
 
@@ -182,6 +174,25 @@ class TestCythonFreeFunctions(unittest.TestCase):
         finally:
             if os.path.exists(tmpfile):
                 os.remove(tmpfile)
+
+
+class TestCythonOPF(unittest.TestCase):
+    def test_native_unsupervised_pipeline_methods(self):
+        sg = cy.Subgraph(4)
+        sg.nfeats = 2
+        for i, feat in enumerate(([0.0, 0.0], [0.1, 0.1], [10.0, 10.0], [10.2, 9.9])):
+            n = sg.get_node(i)
+            n.feat = list(feat)
+            n.position = i
+
+        clf = cy.OPF()
+        clf.create_arcs(sg, 2)
+        clf.compute_pdf(sg)
+        clf.cluster(sg)
+
+        self.assertGreater(sg.nlabels, 0)
+        self.assertGreater(sg.get_node(0).radius, 0.0)
+        self.assertGreater(sg.get_node(0).dens, 0.0)
 
     def test_write_cy_subgraph(self):
         """write_subgraph accepts a cy.Subgraph as well as opfpy.Subgraph."""

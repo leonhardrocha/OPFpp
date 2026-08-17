@@ -1,7 +1,21 @@
+[build-system]
+requires = ["setuptools>=65", "wheel"]
+build-backend = "setuptools.build_meta"
+
 [project]
-name = "pythonlib"
-version = "0.1.0"
-description = "Add your description here"
+name = "opfppy"
+version = "0.6.0"
+description = "Python API for the OPF (Optimum-Path Forest) library (C++/pybind11 backend)"
 readme = "README.md"
-requires-python = ">=3.14"
-dependencies = []
+requires-python = ">=3.11"
+dependencies = [
+    "plyfile>=1.0",
+    "colorcet>=3.0",
+]
+
+[project.urls]
+Repository = "https://github.com/leonhardrocha/OPFpp"
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["opfppy*"]

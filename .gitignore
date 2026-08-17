@@ -1,5 +1,5 @@
-# Local build automation script
-build_opfpy.sh
+# Local root-level build automation script (use tools/build_opfpy.sh instead)
+# /build_opfpy.sh
 
 # VsCode local settings (add using README GNU CMake.md)
 .vscode/
@@ -75,6 +75,10 @@ Thumbs.db
 # Python bytecode/cache
 __pycache__/
 *.py[cod]
+
+# Python packaging outputs
+dist/
+*.egg-info/
 
 
 # CMake

@@ -280,6 +280,102 @@ cdef class Subgraph:
 
 
 # ---------------------------------------------------------------------------
+# OPF wrapper
+# ---------------------------------------------------------------------------
+
+cdef class OPF:
+    """Cython wrapper around opfpy.OPF (backed by C++ OPF<float>)."""
+
+    def __init__(self):
+        self._opf = _opfpy.OPF()
+
+    def train(self, subgraph):
+        if isinstance(subgraph, Subgraph):
+            self._opf.train((<Subgraph>subgraph)._sg)
+        else:
+            self._opf.train(subgraph)
+
+    def classify(self, train_subgraph, test_subgraph):
+        if isinstance(train_subgraph, Subgraph):
+            train_subgraph = (<Subgraph>train_subgraph)._sg
+        if isinstance(test_subgraph, Subgraph):
+            test_subgraph = (<Subgraph>test_subgraph)._sg
+        self._opf.classify(train_subgraph, test_subgraph)
+
+    def learn(self, train_subgraph, eval_subgraph, int n_iterations=10):
+        if isinstance(train_subgraph, Subgraph):
+            train_subgraph = (<Subgraph>train_subgraph)._sg
+        if isinstance(eval_subgraph, Subgraph):
+            eval_subgraph = (<Subgraph>eval_subgraph)._sg
+        self._opf.learn(train_subgraph, eval_subgraph, n_iterations)
+
+    def accuracy(self, subgraph):
+        if isinstance(subgraph, Subgraph):
+            subgraph = (<Subgraph>subgraph)._sg
+        return self._opf.accuracy(subgraph)
+
+    def create_arcs(self, subgraph, int knn):
+        """Build k-NN adjacency and radius in native C++ (opf_CreateArcs)."""
+        if isinstance(subgraph, Subgraph):
+            subgraph = (<Subgraph>subgraph)._sg
+        self._opf.create_arcs(subgraph, knn)
+
+    def destroy_arcs(self, subgraph):
+        if isinstance(subgraph, Subgraph):
+            subgraph = (<Subgraph>subgraph)._sg
+        self._opf.destroy_arcs(subgraph)
+
+    def compute_pdf(self, subgraph):
+        if isinstance(subgraph, Subgraph):
+            subgraph = (<Subgraph>subgraph)._sg
+        self._opf.compute_pdf(subgraph)
+
+    def bestk_min_cut(self, subgraph, int kmin, int kmax):
+        """Run native best-k normalized-cut search (opf_BestkMinCut)."""
+        if isinstance(subgraph, Subgraph):
+            subgraph = (<Subgraph>subgraph)._sg
+        self._opf.bestk_min_cut(subgraph, kmin, kmax)
+
+    def cluster(self, subgraph):
+        if isinstance(subgraph, Subgraph):
+            subgraph = (<Subgraph>subgraph)._sg
+        self._opf.cluster(subgraph)
+
+    def knn_classify(self, train_subgraph, test_subgraph):
+        if isinstance(train_subgraph, Subgraph):
+            train_subgraph = (<Subgraph>train_subgraph)._sg
+        if isinstance(test_subgraph, Subgraph):
+            test_subgraph = (<Subgraph>test_subgraph)._sg
+        self._opf.knn_classify(train_subgraph, test_subgraph)
+
+    def semi_supervised(self, labeled_subgraph, unlabeled_subgraph, eval_subgraph=None):
+        if isinstance(labeled_subgraph, Subgraph):
+            labeled_subgraph = (<Subgraph>labeled_subgraph)._sg
+        if isinstance(unlabeled_subgraph, Subgraph):
+            unlabeled_subgraph = (<Subgraph>unlabeled_subgraph)._sg
+        if isinstance(eval_subgraph, Subgraph):
+            eval_subgraph = (<Subgraph>eval_subgraph)._sg
+        result = self._opf.semi_supervised(labeled_subgraph, unlabeled_subgraph, eval_subgraph)
+        return Subgraph._from_opfpy(result)
+
+    def normalize(self, subgraph):
+        if isinstance(subgraph, Subgraph):
+            subgraph = (<Subgraph>subgraph)._sg
+        self._opf.normalize(subgraph)
+
+    def pruning(self, train_subgraph, eval_subgraph, float desired_accuracy):
+        if isinstance(train_subgraph, Subgraph):
+            train_subgraph = (<Subgraph>train_subgraph)._sg
+        if isinstance(eval_subgraph, Subgraph):
+            eval_subgraph = (<Subgraph>eval_subgraph)._sg
+        return self._opf.pruning(train_subgraph, eval_subgraph, desired_accuracy)
+
+    @property
+    def _raw(self):
+        return self._opf
+
+
+# ---------------------------------------------------------------------------
 # Free functions
 # ---------------------------------------------------------------------------
 

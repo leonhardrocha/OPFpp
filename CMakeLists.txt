@@ -65,12 +65,13 @@ find_package(pybind11 REQUIRED)
 
 add_library(opfpy MODULE
     ${OPFPY_SRC_DIR}/pybind_stub.cpp
-    src_cpp/file.cpp
+    src/file.cpp
+    src/Distance.cpp
 )
 
 target_include_directories(opfpy PRIVATE
     "${OPFPY_INCLUDE_DIR}"
-    "${CMAKE_SOURCE_DIR}/include_cpp"
+    "${CMAKE_SOURCE_DIR}/include"
 )
 
 target_link_libraries(opfpy PRIVATE
