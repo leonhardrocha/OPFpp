@@ -14,7 +14,7 @@ from windows_runtime_helper import add_windows_runtime_dirs
 add_windows_runtime_dirs()
 
 import opfpy
-
+from opfppy.utils import split
 from opfppy.ply_adapter import SplatSubGraph
 from opfppy.colormap import build_label_legend, export_label_legend, labels_to_rgb_array, load_colormap
 
@@ -90,30 +90,9 @@ _COLORMAP = load_colormap(_COLORMAP_SOURCE)
 
 _HERE = os.path.dirname(__file__)
 _SAMPLE_PLY = os.path.normpath(
-    os.path.join(_HERE, "..", "..", "tools", "bridge-server", "sample.ply")
+    os.path.join(_HERE, "..", "data", "sample_labels_full.ply")
 )
 _OUTPUT_DIR = os.path.join(_HERE, "build", "ply_visual_check")
-
-
-def _copy_nodes(src: opfpy.Subgraph, count: int | None = None) -> opfpy.Subgraph:
-    n = src.nnodes if count is None else min(count, src.nnodes)
-    out = opfpy.Subgraph(n)
-    out.nfeats = src.nfeats
-    out.nlabels = max(1, src.nlabels)
-
-    for i in range(n):
-        s = src.get_node(i)
-        d = out.get_node(i)
-        d.feat = s.feat
-        d.truelabel = 0
-        d.label = 0
-        d.position = i
-        d.pathval = 0.0
-        d.pred = -1
-        d.status = 0
-        d.relevant = 0
-        d.root = i
-    return out
 
 
 def _base_rgb(vertices: np.ndarray) -> np.ndarray:
@@ -254,7 +233,7 @@ def _sanity_check_random_splats(
 
 
 class TestPlyUnsupervisedVisual(unittest.TestCase):
-    def test_cluster_and_colorize_full_and_compact(self, train_size: int | None = 300, sample_size: int = 30) -> None:
+    def test_cluster_and_colorize_full_and_compact(self, count: int | None = None, sample_size: int = 300) -> None:
         if not os.path.isfile(_SAMPLE_PLY):
             self.skipTest(f"Sample PLY not found: {_SAMPLE_PLY}")
 
@@ -264,7 +243,9 @@ class TestPlyUnsupervisedVisual(unittest.TestCase):
             source = SplatSubGraph.from_ply_file(_SAMPLE_PLY, feature_profile=profile)
 
             # Train clustering model on a subset to keep test runtime bounded.
-            train = _copy_nodes(source, count=train_size)
+            num = min(sample_size, source.nnodes)
+            den = max(sample_size, source.nnodes)
+            train, test = split(source, num/den) 
             clf = opfpy.OPF()
             # Native LibOPF pipeline (C -> C++ port -> pybind):
             #   opf_BestkMinCut -> createArcs + PDF, then opf_OPFClustering.
@@ -281,18 +262,17 @@ class TestPlyUnsupervisedVisual(unittest.TestCase):
             opfpy.propagate_cluster_labels(train)
 
             # Classify all points from the same source representation.
-            test_all = _copy_nodes(source)
-            clf.knn_classify(train, test_all)
+            clf.knn_classify(train, test)
 
-            labels = [test_all.get_node(i).label for i in range(test_all.nnodes)]
+            labels = [test.get_node(i).label for i in range(test.nnodes)]
             nlabels = len(set(labels))
             print(f"[{profile}] resulting labels: {nlabels}")
 
-            self.assertEqual(len(labels), source.nnodes)
+            self.assertEqual(len(labels), test.nnodes)
             self.assertGreater(nlabels, 0)
 
             out_path = os.path.join(_OUTPUT_DIR, f"sample_labels_{profile}.ply")
-            _write_colorized_ply(_SAMPLE_PLY, labels, out_path)
+            _write_label_ply(_SAMPLE_PLY, labels, out_path, feature_profile=profile)
             legend_path = _write_label_legend(labels, out_path)
             self.assertTrue(os.path.isfile(out_path))
             if legend_path is not None:
