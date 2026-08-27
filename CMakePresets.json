@@ -85,6 +85,30 @@
                 "CMAKE_C_COMPILER": "cl.exe",
                 "CMAKE_CXX_COMPILER": "cl.exe"
             }
+        },
+        {
+            "name": "macos-gcc",
+            "displayName": "macOS GCC",
+            "description": "Configure para macOS (Apple Silicon) usando o GCC do Homebrew e Python do uv",
+            "generator": "Ninja",
+            "binaryDir": "${sourceDir}/build/macos-gcc",
+            "cacheVariables": {
+                "CMAKE_BUILD_TYPE": "Debug",
+                "CMAKE_EXPORT_COMPILE_COMMANDS": "YES",
+                "CMAKE_INSTALL_PREFIX": "${sourceDir}/install/macos-gcc",
+                
+                "CMAKE_C_FLAGS": "-g",
+                "CMAKE_CXX_FLAGS": "-g",
+
+                "CMAKE_C_COMPILER": "/opt/homebrew/bin/gcc-14",
+                "CMAKE_CXX_COMPILER": "/opt/homebrew/bin/g++-14",
+
+                "Python_ROOT_DIR": "${sourceDir}/pythonlib/.venv",
+                "Python_EXECUTABLE": "${sourceDir}/pythonlib/.venv/bin/python",
+                
+                "Python_FIND_STRATEGY": "LOCATION",
+                "Python_FIND_REGISTRY": "NEVER"
+            }
         }
     ]
 }

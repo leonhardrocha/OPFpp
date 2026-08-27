@@ -1,12 +1,15 @@
 # --- Conan auto-install logic ---
-# Uses the .venv Python (pythonlib/.venv) for Conan, since the UCRT64 system
-# Python is externally managed (PEP 668) and cannot install packages via pip.
 set(CONAN_TOOLCHAIN_PATH "${CMAKE_BINARY_DIR}/conan_toolchain.cmake")
 if(NOT EXISTS "${CONAN_TOOLCHAIN_PATH}")
     message(STATUS "Conan toolchain not found. Running Conan to install dependencies...")
 
-    # Resolve .venv Python: prefer it over UCRT64 system Python for Conan
-    set(_venv_python "${CMAKE_SOURCE_DIR}/pythonlib/.venv/Scripts/python.exe")
+    # Resolve .venv Python platform-independently
+    if(WIN32)
+        set(_venv_python "${CMAKE_SOURCE_DIR}/pythonlib/.venv/Scripts/python.exe")
+    else()
+        set(_venv_python "${CMAKE_SOURCE_DIR}/pythonlib/.venv/bin/python")
+    endif()
+
     if(EXISTS "${_venv_python}")
         set(_conan_python "${_venv_python}")
         message(STATUS "Using .venv Python for Conan: ${_conan_python}")
@@ -15,10 +18,10 @@ if(NOT EXISTS "${CONAN_TOOLCHAIN_PATH}")
         message(STATUS "Using system Python for Conan: ${_conan_python}")
     endif()
 
-    # Prefer the conan CLI script if available (Conan v2 often lacks python -m entrypoint).
+    # Find the conan executable inside the specified .venv folder
+    get_filename_component(_venv_dir "${_conan_python}" DIRECTORY)
     find_program(CONAN_EXECUTABLE NAMES conan HINTS
-        "$ENV{VIRTUAL_ENV}/bin"
-        "$ENV{VIRTUAL_ENV}/Scripts"
+        "${_venv_dir}"
         NO_DEFAULT_PATH
     )
     if(NOT CONAN_EXECUTABLE)
@@ -28,7 +31,9 @@ if(NOT EXISTS "${CONAN_TOOLCHAIN_PATH}")
     if(CONAN_EXECUTABLE)
         set(_conan_cmd "${CONAN_EXECUTABLE}")
         set(_conan_args profile detect --force)
+        message(STATUS "Found Conan executable: ${CONAN_EXECUTABLE}")
     else()
+        # Fallback to python package runner (requires conan installed as module or wrapper)
         set(_conan_cmd "${_conan_python}")
         set(_conan_args -m conan profile detect --force)
     endif()
