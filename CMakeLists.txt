@@ -54,6 +54,12 @@ message(STATUS "[PROTETOR] Python REAL do .VENV encontrado: ${Python_EXECUTABLE}
 # Localiza o pybind11 instalado via pip/uv no site-packages do Windows
 set(pybind11_DIR "${MY_VENV_PATH}/Lib/site-packages/pybind11/share/cmake/pybind11")
 set(PYBIND11_FINDPYTHON ON)
+
+# Append the exact folder where Conan 2 aggregates module configuration files
+list(APPEND CMAKE_PREFIX_PATH "${CMAKE_BINARY_DIR}/build/Debug/generators")
+list(APPEND CMAKE_PREFIX_PATH "${CMAKE_BINARY_DIR}/generators")
+
+# Now CMake can successfully resolve pybind11
 find_package(pybind11 REQUIRED)
 message(STATUS "[PROTETOR] Pybind11 do .VENV carregado de: ${pybind11_DIR}")
 
@@ -120,6 +126,31 @@ find_program(CYTHON_EXECUTABLE
     HINTS "${MY_VENV_PATH}/Scripts"
     NO_DEFAULT_PATH # Bloqueia o MSYS2 de injetar o cython deles
 )
+
+# --- Detecção Robusta e Nativa do Cython ---
+# Pergunta diretamente ao Python do .venv se o Cython consegue ser importado
+execute_process(
+    COMMAND "${Python_EXECUTABLE}" -c "import sys; import Cython; print(Cython.__version__)"
+    OUTPUT_VARIABLE CYTHON_VERSION_DETECTED
+    OUTPUT_STRIP_TRAILING_WHITESPACE
+    RESULT_VARIABLE CYTHON_IMPORT_RESULT
+)
+
+if(CYTHON_IMPORT_RESULT EQUAL 0)
+    message(STATUS "Cython encontrado via Python venv! Versão: ${CYTHON_VERSION_DETECTED}")
+    
+    # Se o seu script precisar do caminho absoluto para o executável do cython 'binário':
+    if(WIN32)
+        set(CYTHON_EXECUTABLE "${Python_ROOT_DIR}/Scripts/cython.exe")
+    else()
+        set(CYTHON_EXECUTABLE "${Python_ROOT_DIR}/bin/cython")
+    endif()
+    
+    message(STATUS "Usando executável do Cython em: ${CYTHON_EXECUTABLE}")
+else()
+    message(FATAL_ERROR "Cython não encontrado no .venv (${Python_ROOT_DIR}). Instale com: uv pip install cython")
+endif()
+
 
 if(NOT CYTHON_EXECUTABLE)
     message(FATAL_ERROR "Cython não encontrado no .venv (${MY_VENV_PATH}). Instale com: uv pip install cython")

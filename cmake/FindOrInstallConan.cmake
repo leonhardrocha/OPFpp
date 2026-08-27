@@ -1,5 +1,24 @@
 # --- Conan auto-install logic ---
-set(CONAN_TOOLCHAIN_PATH "${CMAKE_BINARY_DIR}/conan_toolchain.cmake")
+
+# Conan 2 gera arquivos dentro de subpastas (build/<config>/generators)
+if(NOT CMAKE_BUILD_TYPE)
+    set(CMAKE_BUILD_TYPE "Debug")
+endif()
+
+# Tenta mapear o caminho padrão do Conan 2 primeiro
+set(CONAN_TOOLCHAIN_PATH "${CMAKE_BINARY_DIR}/build/${CMAKE_BUILD_TYPE}/generators/conan_toolchain.cmake")
+
+# Caso o Conan mude a estrutura ou use o layout antigo, verifica se existe. 
+# Se não existir, define o fallback para a checagem inicial.
+if(NOT EXISTS "${CONAN_TOOLCHAIN_PATH}")
+    if(EXISTS "${CMAKE_BINARY_DIR}/generators/conan_toolchain.cmake")
+        set(CONAN_TOOLCHAIN_PATH "${CMAKE_BINARY_DIR}/generators/conan_toolchain.cmake")
+    else()
+        set(CONAN_TOOLCHAIN_PATH "${CMAKE_BINARY_DIR}/conan_toolchain.cmake")
+    endif()
+endif()
+
+# Mantém o resto do IF original que checa o NOT EXISTS
 if(NOT EXISTS "${CONAN_TOOLCHAIN_PATH}")
     message(STATUS "Conan toolchain not found. Running Conan to install dependencies...")
 

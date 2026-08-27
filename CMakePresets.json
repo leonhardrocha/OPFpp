@@ -100,14 +100,16 @@
                 "CMAKE_C_FLAGS": "-g",
                 "CMAKE_CXX_FLAGS": "-g",
 
-                "CMAKE_C_COMPILER": "/opt/homebrew/bin/gcc-14",
-                "CMAKE_CXX_COMPILER": "/opt/homebrew/bin/g++-14",
+                "CMAKE_C_COMPILER": "/opt/homebrew/bin/gcc-15",
+                "CMAKE_CXX_COMPILER": "/opt/homebrew/bin/g++-15",
 
                 "Python_ROOT_DIR": "${sourceDir}/pythonlib/.venv",
                 "Python_EXECUTABLE": "${sourceDir}/pythonlib/.venv/bin/python",
                 
                 "Python_FIND_STRATEGY": "LOCATION",
-                "Python_FIND_REGISTRY": "NEVER"
+                "Python_FIND_REGISTRY": "NEVER",
+
+                "CMAKE_PREFIX_PATH": "${sourceDir}/build/macos-gcc/build/Debug/generators;${sourceDir}/pythonlib/.venv/lib/python3.14/site-packages/pybind11/share/cmake/pybind11"
             }
         }
     ]
