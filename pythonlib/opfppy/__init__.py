@@ -57,19 +57,22 @@ except Exception:
 
 import opfpy as _opfpy
 
+from opfppy.distance import DistanceMetric, resolve
+from functools import partial
+
 # Re-export low-level free functions at package top-level.
 hello = _opfpy.hello
 propagate_cluster_labels = _opfpy.propagate_cluster_labels
 read_subgraph = _opfpy.read_subgraph
 write_subgraph = _opfpy.write_subgraph
 split_subgraph = _opfpy.split_subgraph
-eucl_dist = _opfpy.eucl_dist
-chi_squared_dist = _opfpy.chi_squared_dist
-manhattan_dist = _opfpy.manhattan_dist
-canberra_dist = _opfpy.canberra_dist
-squared_chord_dist = _opfpy.squared_chord_dist
-squared_chi_squared_dist = _opfpy.squared_chi_squared_dist
-bray_curtis_dist = _opfpy.bray_curtis_dist
+eucl_dist = partial(distance.distance, metric=DistanceMetric.EUCLIDEAN)
+chi_squared_dist = partial(distance.distance, metric=DistanceMetric.CHI_SQUARED)
+manhattan_dist = partial(distance.distance, metric=DistanceMetric.MANHATTAN)
+canberra_dist = partial(distance.distance, metric=DistanceMetric.CANBERRA)
+squared_chord_dist = partial(distance.distance, metric=DistanceMetric.SQUARED_CHORD)
+squared_chi_squared_dist = partial(distance.distance, metric=DistanceMetric.CHI_SQUARED)
+bray_curtis_dist = partial(distance.distance, metric=DistanceMetric.BRAY_CURTIS)
 subgraph_info = _opfpy.subgraph_info
 k_fold = _opfpy.k_fold
 merge_subgraphs = _opfpy.merge_subgraphs

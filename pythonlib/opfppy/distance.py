@@ -19,7 +19,7 @@ id already implemented at the C++ layer::
 """
 
 from __future__ import annotations
-
+import numpy as np
 from array import array
 from enum import IntEnum
 from typing import Any, Callable, Union
@@ -119,7 +119,7 @@ def _detect_precision(features_a: Any, features_b: Any) -> str:
     return "float"
 
 
-def _resolve_distance_callable(distance: DistanceSpec, features_a: Any, features_b: Any) -> Callable[[Any, Any], float]:
+def _resolve_distance_callable(distance: DistanceSpec, features_a: Any, features_b: Any) -> Union[Callable[[Any, Any], float], Callable[[Any, Any], np.float64]]:
     import opfpy
 
     distance_id = resolve(distance)
@@ -132,7 +132,7 @@ def _resolve_distance_callable(distance: DistanceSpec, features_a: Any, features
     return getattr(opfpy, base_name)
 
 
-def distance(features_a: Any, features_b: Any, metric: DistanceSpec = DistanceMetric.EUCLIDEAN) -> float:
+def distance(features_a: Any, features_b: Any, metric: DistanceSpec = DistanceMetric.EUCLIDEAN) -> Union[float,np.float64]:
     """Compute distance with runtime float/double dispatch.
 
     The template specialization is chosen dynamically:
@@ -141,7 +141,7 @@ def distance(features_a: Any, features_b: Any, metric: DistanceSpec = DistanceMe
       (e.g. numpy float64 dtype or array('d'))
     """
     fn = _resolve_distance_callable(metric, features_a, features_b)
-    return float(fn(features_a, features_b))
+    return fn(features_a, features_b)
 
 
 def eucl_dist(features_a: Any, features_b: Any) -> float:
